@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>家教需求看板</title>
+    <link rel="stylesheet" href="./tutoring.css">
+</head>
+<body>
+<div class="grid-bg" aria-hidden="true"></div>
+
+<main class="page">
+    <header class="hero">
+        <p class="hero__tag">H5 静态原型 · /api 适配</p>
+        <h1>家教需求看板</h1>
+        <p class="hero__desc">极客极简风：高对比、留白、网格感。先跑通列表交互，后续可直接接后端 API。</p>
+    </header>
+
+    <section class="toolbar" aria-label="筛选工具栏">
+        <div class="toolbar__search">
+            <label for="keyword" class="label">关键词</label>
+            <input id="keyword" class="input" type="search" placeholder="输入科目/年级/备注关键词">
+        </div>
+
+        <div class="toolbar__filters">
+            <div>
+                <label for="city" class="label">城市</label>
+                <select id="city" class="select"></select>
+            </div>
+            <div>
+                <label for="district" class="label">区域</label>
+                <select id="district" class="select"></select>
+            </div>
+            <div>
+                <label for="grade" class="label">年级</label>
+                <select id="grade" class="select"></select>
+            </div>
+            <div>
+                <label for="subject" class="label">科目</label>
+                <select id="subject" class="select"></select>
+            </div>
+            <div>
+                <label for="salary" class="label">薪资</label>
+                <select id="salary" class="select"></select>
+            </div>
+            <div>
+                <label for="sort" class="label">排序</label>
+                <select id="sort" class="select">
+                    <option value="latest">最新</option>
+                    <option value="salaryDesc">薪资高</option>
+                    <option value="salaryAsc">薪资低</option>
+                </select>
+            </div>
+        </div>
+    </section>
+
+    <section class="content">
+        <div class="list-panel" aria-live="polite">
+            <div class="list-panel__meta">
+                <strong id="resultCount">0 条需求</strong>
+                <span id="resultHint">正在准备数据…</span>
+            </div>
+            <ul id="listing" class="listing" aria-label="需求列表"></ul>
+            <p id="emptyState" class="empty hidden">没有符合条件的需求，请尝试调整筛选条件。</p>
+        </div>
+
+        <aside class="detail-panel" id="detailPanel" aria-label="需求详情">
+            <div class="detail-panel__placeholder" id="detailPlaceholder">
+                <h2>查看详情</h2>
+                <p>点击左侧任意需求卡片，右侧会显示完整信息。</p>
+            </div>
+
+            <article class="detail hidden" id="detail">
+                <h2 id="detailTitle"></h2>
+                <p id="detailMeta" class="detail__meta"></p>
+                <dl class="detail__grid">
+                    <div>
+                        <dt>授课地点</dt>
+                        <dd id="detailLocation"></dd>
+                    </div>
+                    <div>
+                        <dt>年级科目</dt>
+                        <dd id="detailLesson"></dd>
+                    </div>
+                    <div>
+                        <dt>薪资范围</dt>
+                        <dd id="detailSalary"></dd>
+                    </div>
+                    <div>
+                        <dt>发布时间</dt>
+                        <dd id="detailCreatedAt"></dd>
+                    </div>
+                </dl>
+                <section>
+                    <h3>需求说明</h3>
+                    <p id="detailDescription"></p>
+                </section>
+            </article>
+        </aside>
+    </section>
+</main>
+
+<script src="./tutoring.js"></script>
+</body>
+</html>

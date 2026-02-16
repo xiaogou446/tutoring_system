@@ -1,0 +1,9 @@
+com/lin/webtemplate/facade/dto/TutoringInfoPageView.class
+com/lin/webtemplate/facade/dto/AutoScanRequest.class
+com/lin/webtemplate/facade/dto/Result.class
+com/lin/webtemplate/facade/dto/ManualBackfillRequest.class
+com/lin/webtemplate/facade/model/TaskStatus.class
+com/lin/webtemplate/facade/dto/AutoScanTaskView.class
+com/lin/webtemplate/facade/dto/TutoringInfoView.class
+com/lin/webtemplate/facade/model/TaskSource.class
+com/lin/webtemplate/facade/dto/ManualBackfillTaskView.class

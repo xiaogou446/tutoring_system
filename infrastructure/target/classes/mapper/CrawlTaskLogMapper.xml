@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lin.webtemplate.infrastructure.mapper.CrawlTaskLogMapper">
+
+    <insert id="insert" parameterType="com.lin.webtemplate.infrastructure.entity.CrawlTaskLogEntity" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO crawl_task_log (task_id, status, error_code, error_message, detail, created_at)
+        VALUES (#{taskId}, #{status}, #{errorCode}, #{errorMessage}, #{detail}, CURRENT_TIMESTAMP)
+    </insert>
+</mapper>
