@@ -8,17 +8,26 @@ Guidance for coding agents working in this repository.
 - All newly written project documentation must be in Chinese (keep code symbols, API names, and third-party proper nouns in original form where needed).
 - If existing files are in English, append or update content in Chinese unless external constraints require English.
 
+## 0.5) Java 通用强制规范（适用于后续新建 Java 项目）
+
+- 本节为跨项目复用的强制约定；新建 Java 项目默认继承，除非有明确书面例外。
+- Spring 依赖注入统一使用 `@Resource`；非特殊场景不使用构造器注入或 `@Autowired`。
+- 命名约定：Mapper 层返回对象使用 `DO`；领域层返回对象使用 `Model`；除框架强约束外不使用 `Entity` 作为业务对象命名。
+- 数据对象（DO/Model/DTO/VO）中每个属性都必须有注释（推荐字段级 Javadoc），说明字段含义、单位或取值约束。
+- SQL DDL 约定：业务字段默认 `NOT NULL` 且必须提供 `DEFAULT` 默认值，避免空值语义不清。
+- SQL 注释约定：每张表和每个字段必须有备注；优先在 `CREATE TABLE` 语句内使用 `COMMENT`（表注释 + 列注释）。
+
 ## 1) Project shape
 
 - Build tool: Maven multi-module project.
 - Java version: 17.
 - Parent POM: `pom.xml`.
-- Modules (reactor order): `facade`, `infrastructure`, `service`, `bootstrap`, `test`.
-- Runtime app module: `bootstrap` (Spring Boot).
-- Main entrypoint: `bootstrap/src/main/java/com/lin/webtemplate/WebTemplateApplication.java`.
-- Web/controller code currently lives in `service` and is picked up by component scanning.
-- Tests currently live in `bootstrap/src/test/java`.
-- Local Maven repo is redirected to workspace by `.mvn/maven.config`.
+- Modules (reactor order): `java/facade`, `java/infrastructure`, `java/service`, `java/bootstrap`, `java/test`.
+- Runtime app module: `java/bootstrap` (Spring Boot).
+- Main entrypoint: `java/bootstrap/src/main/java/com/lin/webtemplate/WebTemplateApplication.java`.
+- Web/controller code currently lives in `java/service` and is picked up by component scanning.
+- Tests currently live in `java/bootstrap/src/test/java`.
+- Maven 本地仓库统一使用全局配置（`~/.m2/repository` 或 `settings.xml` 指定路径），禁止在项目内通过 `.mvn/maven.config` 或命令参数重定向到工作区。
 
 ## 2) Canonical commands
 
@@ -31,18 +40,19 @@ Run commands from repository root unless noted.
 - Full verification (includes tests):
   - `mvn clean verify`
 - Build only one module plus required upstream modules:
-  - `mvn -pl bootstrap -am package -DskipTests`
+  - `mvn -pl java/bootstrap -am package -DskipTests`
 
 ### Test
 
 - Run all tests in all modules:
   - `mvn test`
 - Run tests only in one module:
-  - `mvn -pl bootstrap -am test -Dsurefire.failIfNoSpecifiedTests=false`
+- Run tests only in one module:
+  - `mvn -pl java/bootstrap -am test -Dsurefire.failIfNoSpecifiedTests=false`
 - Run a single test class:
-  - `mvn -pl bootstrap -am -Dtest=HeartbeatControllerTest test -Dsurefire.failIfNoSpecifiedTests=false`
+  - `mvn -pl java/bootstrap -am -Dtest=HeartbeatControllerTest test -Dsurefire.failIfNoSpecifiedTests=false`
 - Run a single test method (preferred pattern):
-  - `mvn -pl bootstrap -am -Dtest=HeartbeatControllerTest#actuatorHealth_shouldBeAvailable test -Dsurefire.failIfNoSpecifiedTests=false`
+  - `mvn -pl java/bootstrap -am -Dtest=HeartbeatControllerTest#actuatorHealth_shouldBeAvailable test -Dsurefire.failIfNoSpecifiedTests=false`
 - If Maven says no matching tests in other modules, keep `-Dsurefire.failIfNoSpecifiedTests=false`.
 
 ### Lint / formatting / static analysis
@@ -55,8 +65,9 @@ Run commands from repository root unless noted.
 ### Run app
 
 - Run Spring Boot app from root:
-  - `mvn -pl bootstrap -am spring-boot:run`
-- Default port is `8081` (see `bootstrap/src/main/resources/application.properties`).
+- Run Spring Boot app from root:
+  - `mvn -pl java/bootstrap -am spring-boot:run`
+- Default port is `8081` (see `java/bootstrap/src/main/resources/application.properties`).
 
 ## 3) Known current behavior
 
@@ -89,6 +100,14 @@ Follow existing Spring Boot + Java 17 conventions in this repo.
 - Add concise comments for non-obvious or critical logic inside methods (validation branches, business rules, boundary handling, external calls).
 - Keep comments accurate and maintainable; update comments together with logic changes.
 - Leave one blank line between field/property declarations in classes for readability.
+- 数据对象（DO/Model/DTO/VO）中的每个属性都必须有注释（推荐字段级 Javadoc），说明字段含义、单位或取值约束。
+
+### SQL DDL 约定
+
+- 新增或修改 `schema.sql` 中的业务字段时，默认使用 `NOT NULL` 约束。
+- 新增或修改 `schema.sql` 中的业务字段时，必须提供 `DEFAULT` 默认值，避免空值语义不清。
+- 每张表和每个字段都需要补充备注，优先在 `CREATE TABLE` 内联 `COMMENT`。
+- 默认值应与业务语义一致（字符串通常为 `''`，时间通常为 `CURRENT_TIMESTAMP`，数值按领域约定）。
 
 ### Imports
 
@@ -107,7 +126,13 @@ Follow existing Spring Boot + Java 17 conventions in this repo.
 - Keep generics explicit at boundaries (e.g., `Result<HeartbeatData>`).
 - This project currently prefers regular classes with Lombok over Java records for response wrappers.
 - Use `final` for fields that should not change after construction.
-- Favor constructor injection for Spring components.
+- Mapper 层返回对象统一命名为 `DO`；领域层返回对象统一命名为 `Model`。
+- 除框架强约束场景外，不使用 `Entity` 作为业务对象命名。
+
+### Spring 注入约定
+
+- Spring 组件依赖注入统一使用 `@Resource`。
+- 非特殊场景下不使用构造器注入或 `@Autowired`，保持注入风格一致。
 
 ### Naming
 
@@ -151,9 +176,10 @@ Follow existing Spring Boot + Java 17 conventions in this repo.
 ## 5) Dependency and module rules
 
 - Keep module boundaries clean:
-  - `bootstrap` depends on `service`.
-  - `service` depends on `infrastructure`.
-  - `infrastructure` depends on `facade`.
+- Keep module boundaries clean:
+  - `java/bootstrap` depends on `java/service`.
+  - `java/service` depends on `java/infrastructure`.
+  - `java/infrastructure` depends on `java/facade`.
 - Add dependencies in the narrowest module possible.
 - Prefer managing versions in parent POM `dependencyManagement`.
 - Keep Lombok usage consistent with existing code; do not mix many competing boilerplate patterns in same package.
@@ -164,7 +190,7 @@ Follow existing Spring Boot + Java 17 conventions in this repo.
 - After edits, run targeted tests first, then broader verification if feasible.
 - Keep diffs small and intention-revealing.
 - If behavior and tests disagree, update both coherently and explain rationale.
-- Do not modify `.mvn/maven.config` unless intentionally changing local repository strategy.
+- `.mvn/maven.config` 不得设置 `maven.repo.local`；若发现该配置需移除并改用全局仓库。
 
 ## 7) Cursor/Copilot rules check
 

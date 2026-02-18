@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: com.lin.webtemplate.backfill.ManualBackfillControllerTest
--------------------------------------------------------------------------------
-Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.032 s -- in com.lin.webtemplate.backfill.ManualBackfillControllerTest

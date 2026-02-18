@@ -1,0 +1,5 @@
+com/lin/webtemplate/service/model/TutoringInfoItemModel.class
+com/lin/webtemplate/service/model/TutoringInfoPageModel.class
+com/lin/webtemplate/service/dto/TutoringInfoPageQueryDTO.class
+com/lin/webtemplate/service/service/TutoringInfoQueryService.class
+com/lin/webtemplate/service/controller/TutoringInfoController.class

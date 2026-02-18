@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>家教 H5/Web UI 预览</title>
+    <style>
+        :root {
+            --paper: #ffffff;
+            --panel: #f9fcff;
+            --text: #10233f;
+            --muted: #59708f;
+            --line: #d7e2f0;
+            --accent: #00b7d9;
+            --accent-soft: #e8faff;
+            --mono: "JetBrains Mono", Menlo, Consolas, monospace;
+            --sans: "IBM Plex Sans SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+            --radius: 12px;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            color: var(--text);
+            font-family: var(--sans);
+            background:
+                radial-gradient(circle at 12% 8%, #e9f8ff 0%, transparent 26%),
+                radial-gradient(circle at 92% 2%, #eef4ff 0%, transparent 30%),
+                linear-gradient(180deg, #f4f8fd 0%, #edf3fb 100%);
+        }
+
+        .page {
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 26px 16px 42px;
+        }
+
+        .head {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .title {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .desc {
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .status {
+            font-size: 12px;
+            color: var(--muted);
+            font-family: var(--mono);
+            align-self: center;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 370px 1fr;
+            gap: 16px;
+        }
+
+        .box {
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: var(--paper);
+            overflow: hidden;
+            box-shadow: 0 8px 28px rgba(16, 35, 63, 0.06);
+        }
+
+        .box-head {
+            min-height: 52px;
+            padding: 0 14px;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .tag {
+            border: 1px solid #bcebf4;
+            background: var(--accent-soft);
+            color: #0f6b7d;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-family: var(--mono);
+        }
+
+        input,
+        select,
+        button {
+            width: 100%;
+            min-height: 44px;
+            border-radius: 10px;
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--text);
+            font-size: 14px;
+            padding: 0 10px;
+            outline: none;
+        }
+
+        input:focus,
+        select:focus,
+        button:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-soft);
+        }
+
+        button {
+            cursor: pointer;
+            transition: 160ms ease;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            border-color: #76dbe9;
+            background: linear-gradient(180deg, #e9fcff 0%, #dff6ff 100%);
+            color: #0a6475;
+        }
+
+        .label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .h5 {
+            margin: 12px auto;
+            width: 338px;
+            min-height: 650px;
+            border: 1px solid var(--line);
+            border-radius: 24px;
+            background: linear-gradient(180deg, #fcfeff 0%, #f7fbff 100%);
+            padding: 10px;
+        }
+
+        .h5-top {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            padding-bottom: 8px;
+            background: rgba(252, 254, 255, 0.95);
+            backdrop-filter: blur(4px);
+        }
+
+        .h5-search {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+        }
+
+        .h5-more {
+            margin-top: 8px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: var(--panel);
+            padding: 8px;
+        }
+
+        .h5-more-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .h5-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .chips {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+            overflow: auto;
+            padding-bottom: 2px;
+        }
+
+        .chip {
+            min-height: 34px;
+            border: 1px solid #88dce9;
+            border-radius: 999px;
+            background: var(--accent-soft);
+            color: #0a7388;
+            padding: 6px 12px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .list {
+            display: grid;
+            gap: 10px;
+            padding-top: 8px;
+        }
+
+        .card,
+        .item {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #fff;
+            padding: 10px;
+        }
+
+        .card-time,
+        .meta {
+            font-family: var(--mono);
+            color: #2d5d8a;
+            font-size: 12px;
+        }
+
+        .meta {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 7px;
+        }
+
+        .card-text,
+        .text {
+            margin-top: 8px;
+            font-size: 14px;
+            line-height: 1.65;
+            color: #183052;
+        }
+
+        .card-foot {
+            margin-top: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .link {
+            color: #0589a3;
+            text-decoration: none;
+            font-size: 12px;
+            min-height: 28px;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .web {
+            padding: 12px;
+        }
+
+        .filter-panel {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: var(--panel);
+            padding: 10px;
+            margin-bottom: 12px;
+        }
+
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .results {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: var(--panel);
+            padding: 10px;
+        }
+
+        .pager {
+            margin-top: 10px;
+            border-top: 1px dashed var(--line);
+            padding-top: 10px;
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .page-buttons {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .page-btn {
+            width: 36px;
+            min-height: 36px;
+            padding: 0;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .page-btn.active {
+            border-color: #88dce9;
+            background: var(--accent-soft);
+            color: #0a7388;
+        }
+
+        .page-dots {
+            min-width: 24px;
+            text-align: center;
+            color: var(--muted);
+            font-family: var(--mono);
+        }
+
+        .pager .stat {
+            font-size: 12px;
+            color: var(--muted);
+            font-family: var(--mono);
+        }
+
+        .tip {
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--muted);
+            font-family: var(--mono);
+            line-height: 1.6;
+        }
+
+        @media (max-width: 1024px) {
+            .layout { grid-template-columns: 1fr; }
+            .h5 { width: 100%; max-width: 420px; }
+            .filter-grid { grid-template-columns: 1fr 1fr; }
+            .pager { grid-template-columns: 1fr 1fr; }
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            .item,
+            .card,
+            .box { animation: fade-up 220ms ease both; }
+            @keyframes fade-up {
+                from { opacity: 0; transform: translateY(6px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+        }
+    </style>
+</head>
+<body>
+<main class="page">
+    <section class="head">
+        <div>
+            <h1 class="title">家教列表 UI 预览（白色极客风）</h1>
+            <div class="desc">已按后端字段对齐：pageNo/pageSize/sortOrder/contentKeyword/gradeKeyword/subjectKeyword/addressKeyword/timeKeyword/salaryKeyword/teacherKeyword</div>
+        </div>
+        <div class="status" id="status">默认展示示例数据，可输入筛选并联调接口</div>
+    </section>
+
+    <section class="layout">
+        <div class="box">
+            <div class="box-head">
+                <span>H5 预览（手机）</span>
+                <span class="tag">mobile</span>
+            </div>
+            <div class="h5">
+                <div class="h5-top">
+                    <label class="label" for="mContentKeyword">内容关键词（contentKeyword）</label>
+                    <div class="h5-search">
+                        <input id="mContentKeyword" list="contentOpts" value="海淀 数学" placeholder="可输入自定义关键词">
+                        <button type="button" id="h5Apply">查询</button>
+                    </div>
+
+                    <details class="h5-more">
+                        <summary>展开筛选（可自定义输入）</summary>
+                        <div class="h5-more-grid">
+                            <div>
+                                <label class="label" for="mGradeKeyword">年级关键词</label>
+                                <input id="mGradeKeyword" list="gradeOpts" value="初二">
+                            </div>
+                            <div>
+                                <label class="label" for="mSubjectKeyword">科目关键词</label>
+                                <input id="mSubjectKeyword" list="subjectOpts" value="数学">
+                            </div>
+                            <div>
+                                <label class="label" for="mAddressKeyword">地址关键词</label>
+                                <input id="mAddressKeyword" list="addressOpts" value="海淀">
+                            </div>
+                            <div>
+                                <label class="label" for="mTimeKeyword">时间关键词</label>
+                                <input id="mTimeKeyword" list="timeOpts" value="周末">
+                            </div>
+                            <div>
+                                <label class="label" for="mSalaryKeyword">薪资关键词</label>
+                                <input id="mSalaryKeyword" list="salaryOpts" value="200-300">
+                            </div>
+                            <div>
+                                <label class="label" for="mTeacherKeyword">教员要求关键词</label>
+                                <input id="mTeacherKeyword" list="teacherOpts" value="有经验">
+                            </div>
+                        </div>
+                        <div class="h5-actions">
+                            <select id="mSortOrder" aria-label="手机端排序">
+                                <option value="desc">发布时间：最新</option>
+                                <option value="asc">发布时间：最早</option>
+                            </select>
+                            <select id="mPageSize" aria-label="手机端每页条数">
+                                <option value="8">每页 8 条</option>
+                                <option value="12">每页 12 条</option>
+                                <option value="20">每页 20 条</option>
+                            </select>
+                        </div>
+                    </details>
+
+                    <div class="chips" id="mobileChips"></div>
+                </div>
+                <div id="mobileList" class="list"></div>
+            </div>
+        </div>
+
+        <div class="box">
+            <div class="box-head">
+                <span>Web 预览（桌面）</span>
+                <span class="tag">desktop</span>
+            </div>
+            <div class="web">
+                <section class="filter-panel">
+                    <div class="filter-grid">
+                        <div>
+                            <label class="label" for="contentKeyword">内容关键词（contentKeyword）</label>
+                            <input id="contentKeyword" list="contentOpts" value="数学 提分" placeholder="支持自定义输入">
+                        </div>
+                        <div>
+                            <label class="label" for="gradeKeyword">年级关键词（gradeKeyword）</label>
+                            <input id="gradeKeyword" list="gradeOpts" value="初二">
+                        </div>
+                        <div>
+                            <label class="label" for="subjectKeyword">科目关键词（subjectKeyword）</label>
+                            <input id="subjectKeyword" list="subjectOpts" value="数学">
+                        </div>
+                        <div>
+                            <label class="label" for="addressKeyword">地址关键词（addressKeyword）</label>
+                            <input id="addressKeyword" list="addressOpts" value="海淀">
+                        </div>
+                        <div>
+                            <label class="label" for="timeKeyword">时间关键词（timeKeyword）</label>
+                            <input id="timeKeyword" list="timeOpts" value="周末">
+                        </div>
+                        <div>
+                            <label class="label" for="salaryKeyword">薪资关键词（salaryKeyword）</label>
+                            <input id="salaryKeyword" list="salaryOpts" value="200-300">
+                        </div>
+                        <div>
+                            <label class="label" for="teacherKeyword">教员要求（teacherKeyword）</label>
+                            <input id="teacherKeyword" list="teacherOpts" value="有经验">
+                        </div>
+                        <div>
+                            <label class="label" for="sortOrder">发布时间排序（sortOrder）</label>
+                            <select id="sortOrder" aria-label="排序方式">
+                                <option value="desc">最新优先</option>
+                                <option value="asc">最早优先</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="filter-grid" style="margin-top:8px;grid-template-columns:1fr 1fr 1fr 1fr;">
+                        <button id="loadMock" type="button">加载示例</button>
+                        <button id="loadApi" type="button" class="btn-primary">应用筛选</button>
+                        <div class="tip" style="margin:0;display:flex;align-items:center;">筛选框支持“默认值 + 自定义输入”</div>
+                        <div></div>
+                    </div>
+                </section>
+
+                <section id="desktopList" class="results"></section>
+
+                <section class="pager">
+                    <div class="stat" id="pageStat">第 1 页 / 共 1 页 · 共 0 条</div>
+                    <div class="page-buttons" id="pageButtons"></div>
+                    <select id="pageSize" aria-label="每页展示条数">
+                        <option value="8">每页 8 条</option>
+                        <option value="12">每页 12 条</option>
+                        <option value="20">每页 20 条</option>
+                    </select>
+                </section>
+            </div>
+        </div>
+    </section>
+
+    <datalist id="contentOpts"><option value="数学 提分"></option><option value="英语 口语"></option><option value="全科 作业"></option></datalist>
+    <datalist id="gradeOpts"><option value="小学"></option><option value="初一"></option><option value="初二"></option><option value="高一"></option></datalist>
+    <datalist id="subjectOpts"><option value="数学"></option><option value="英语"></option><option value="物理"></option><option value="全科"></option></datalist>
+    <datalist id="addressOpts"><option value="海淀"></option><option value="朝阳"></option><option value="西城"></option><option value="线上"></option></datalist>
+    <datalist id="timeOpts"><option value="周末"></option><option value="晚间"></option><option value="每周三次"></option></datalist>
+    <datalist id="salaryOpts"><option value="150-200"></option><option value="200-300"></option><option value="300+"></option></datalist>
+    <datalist id="teacherOpts"><option value="有经验"></option><option value="在职教师"></option><option value="师范专业"></option></datalist>
+</main>
+
+<script>
+    const mockRecords = [
+        { id: 1001, sourceUrl: "https://example.com/item/1001", contentBlock: "【海淀】初二学生求数学家教，每周三次晚间辅导，目标提升成绩，要求沟通耐心。", publishedAt: "2026-02-17T20:35:00" },
+        { id: 1002, sourceUrl: "https://example.com/item/1002", contentBlock: "【朝阳】高一英语口语与阅读提升，周末安排，薪资可议，优先在职教师。", publishedAt: "2026-02-17T18:10:00" },
+        { id: 1003, sourceUrl: "https://example.com/item/1003", contentBlock: "【西城】小学五年级全科作业托管与学习习惯培养，需求长期稳定辅导。", publishedAt: "2026-02-17T15:42:00" }
+    ];
+
+    const state = { pageNo: 1, pageSize: 8, total: 0, totalPages: 1 };
+
+    function formatTime(value) {
+        return value ? String(value).replace("T", " ").slice(0, 16) : "--";
+    }
+
+    function setStatus(text) {
+        document.getElementById("status").textContent = text;
+    }
+
+    function setPageStat() {
+        document.getElementById("pageStat").textContent = `第 ${state.pageNo} 页 / 共 ${state.totalPages} 页 · 共 ${state.total} 条`;
+    }
+
+    function buildPageItems(totalPages, currentPage) {
+        if (totalPages <= 7) {
+            return Array.from({ length: totalPages }, (_, i) => i + 1);
+        }
+
+        const items = [1];
+        let start = Math.max(2, currentPage - 1);
+        let end = Math.min(totalPages - 1, currentPage + 1);
+
+        if (currentPage <= 3) {
+            start = 2;
+            end = 4;
+        } else if (currentPage >= totalPages - 2) {
+            start = totalPages - 3;
+            end = totalPages - 1;
+        }
+
+        if (start > 2) {
+            items.push("...");
+        }
+
+        for (let page = start; page <= end; page += 1) {
+            items.push(page);
+        }
+
+        if (end < totalPages - 1) {
+            items.push("...");
+        }
+
+        items.push(totalPages);
+        return items;
+    }
+
+    function renderPageButtons() {
+        const container = document.getElementById("pageButtons");
+        const items = buildPageItems(state.totalPages, state.pageNo);
+        container.innerHTML = items.map((item) => {
+            if (item === "...") {
+                return '<span class="page-dots">...</span>';
+            }
+            const activeClass = item === state.pageNo ? " active" : "";
+            return `<button type="button" class="page-btn${activeClass}" data-page="${item}">${item}</button>`;
+        }).join("");
+
+        container.querySelectorAll("button[data-page]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const targetPage = Number(btn.getAttribute("data-page"));
+                if (targetPage !== state.pageNo) {
+                    state.pageNo = targetPage;
+                    requestApi("web");
+                }
+            });
+        });
+    }
+
+    function renderMobileChips() {
+        const chips = [
+            `年级:${document.getElementById("mGradeKeyword").value || "-"}`,
+            `科目:${document.getElementById("mSubjectKeyword").value || "-"}`,
+            `地址:${document.getElementById("mAddressKeyword").value || "-"}`,
+            `薪资:${document.getElementById("mSalaryKeyword").value || "-"}`
+        ];
+        document.getElementById("mobileChips").innerHTML = chips.map((t) => `<span class="chip">${t}</span>`).join("");
+    }
+
+    function render(records) {
+        const items = Array.isArray(records) ? records : [];
+        const mobileNode = document.getElementById("mobileList");
+        const desktopNode = document.getElementById("desktopList");
+
+        if (!items.length) {
+            const empty = "<div class=\"item\"><div class=\"text\">暂无匹配结果，请修改筛选条件。</div></div>";
+            mobileNode.innerHTML = empty;
+            desktopNode.innerHTML = empty;
+            return;
+        }
+
+        mobileNode.innerHTML = items.map((item) => `
+            <article class="card">
+                <div class="card-time">${formatTime(item.publishedAt)}</div>
+                <div class="card-text">${item.contentBlock || "（无内容）"}</div>
+                <div class="card-foot">
+                    <span class="card-time">ID #${item.id || "-"}</span>
+                    <a class="link" href="${item.sourceUrl || "#"}" target="_blank" rel="noreferrer">查看原文</a>
+                </div>
+            </article>
+        `).join("");
+
+        desktopNode.innerHTML = items.map((item) => `
+            <article class="item">
+                <div class="meta"><span>ID #${item.id || "-"}</span><span>${formatTime(item.publishedAt)}</span></div>
+                <div class="text">${item.contentBlock || "（无内容）"}</div>
+                <div class="card-foot"><a class="link" href="${item.sourceUrl || "#"}" target="_blank" rel="noreferrer">查看原文</a></div>
+            </article>
+        `).join("");
+    }
+
+    function getValue(id) {
+        return document.getElementById(id).value.trim();
+    }
+
+    function buildQuery(source) {
+        const mobile = source === "mobile";
+        const pageSize = mobile ? getValue("mPageSize") || "8" : getValue("pageSize") || "8";
+        const sortOrder = mobile ? getValue("mSortOrder") || "desc" : getValue("sortOrder") || "desc";
+        return new URLSearchParams({
+            pageNo: String(state.pageNo),
+            pageSize,
+            sortOrder,
+            contentKeyword: mobile ? getValue("mContentKeyword") : getValue("contentKeyword"),
+            gradeKeyword: mobile ? getValue("mGradeKeyword") : getValue("gradeKeyword"),
+            subjectKeyword: mobile ? getValue("mSubjectKeyword") : getValue("subjectKeyword"),
+            addressKeyword: mobile ? getValue("mAddressKeyword") : getValue("addressKeyword"),
+            timeKeyword: mobile ? getValue("mTimeKeyword") : getValue("timeKeyword"),
+            salaryKeyword: mobile ? getValue("mSalaryKeyword") : getValue("salaryKeyword"),
+            teacherKeyword: mobile ? getValue("mTeacherKeyword") : getValue("teacherKeyword")
+        });
+    }
+
+    async function requestApi(source = "web") {
+        const query = buildQuery(source);
+        setStatus(`请求中: /h5/tutoring-info/page?${query.toString()}`);
+        try {
+            // 页面独立运行时，请求本地后端 8081。
+            const resp = await fetch(`http://localhost:8081/h5/tutoring-info/page?${query.toString()}`);
+            const result = await resp.json();
+            if (!resp.ok || !result || result.success !== true) {
+                throw new Error(result && result.message ? result.message : "接口返回异常");
+            }
+            const data = result.data || {};
+            state.total = Number(data.total || 0);
+            state.pageSize = Number(query.get("pageSize") || 8);
+            state.totalPages = Math.max(1, Math.ceil(state.total / state.pageSize));
+            state.pageNo = Math.min(state.pageNo, state.totalPages);
+
+            render(data.records || []);
+            renderMobileChips();
+            setPageStat();
+            renderPageButtons();
+            setStatus(`加载完成: 第 ${state.pageNo}/${state.totalPages} 页, total=${state.total}`);
+        } catch (e) {
+            render([]);
+            setPageStat();
+            renderPageButtons();
+            setStatus(`请求失败（可能是跨域或后端未启动）: ${e.message}`);
+        }
+    }
+
+    function syncMobileToWeb() {
+        document.getElementById("contentKeyword").value = getValue("mContentKeyword");
+        document.getElementById("gradeKeyword").value = getValue("mGradeKeyword");
+        document.getElementById("subjectKeyword").value = getValue("mSubjectKeyword");
+        document.getElementById("addressKeyword").value = getValue("mAddressKeyword");
+        document.getElementById("timeKeyword").value = getValue("mTimeKeyword");
+        document.getElementById("salaryKeyword").value = getValue("mSalaryKeyword");
+        document.getElementById("teacherKeyword").value = getValue("mTeacherKeyword");
+        document.getElementById("sortOrder").value = getValue("mSortOrder");
+        document.getElementById("pageSize").value = getValue("mPageSize");
+    }
+
+    document.getElementById("loadMock").addEventListener("click", () => {
+        state.total = mockRecords.length;
+        state.pageNo = 1;
+        state.pageSize = Number(getValue("pageSize") || 8);
+        state.totalPages = 1;
+        render(mockRecords);
+        renderMobileChips();
+        setPageStat();
+        renderPageButtons();
+        setStatus("已加载示例数据");
+    });
+
+    document.getElementById("loadApi").addEventListener("click", () => {
+        state.pageNo = 1;
+        requestApi("web");
+    });
+
+    document.getElementById("h5Apply").addEventListener("click", () => {
+        state.pageNo = 1;
+        syncMobileToWeb();
+        requestApi("mobile");
+    });
+
+    document.getElementById("pageSize").addEventListener("change", () => {
+        state.pageNo = 1;
+        requestApi("web");
+    });
+
+    render(mockRecords);
+    renderMobileChips();
+    state.total = mockRecords.length;
+    setPageStat();
+    renderPageButtons();
+</script>
+</body>
+</html>

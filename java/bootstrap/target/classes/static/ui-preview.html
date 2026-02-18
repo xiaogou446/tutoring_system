@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>家教信息 UI 双端预览</title>
+    <style>
+        :root {
+            --bg: #0b0f14;
+            --bg-soft: #111824;
+            --panel: #121a26;
+            --panel-2: #0f1620;
+            --text: #e8f0ff;
+            --muted: #8fa2bf;
+            --line: #253347;
+            --accent: #23d5f6;
+            --accent-soft: rgba(35, 213, 246, 0.18);
+            --danger: #ff6c8a;
+            --radius: 12px;
+            --mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+            --sans: "IBM Plex Sans SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: var(--sans);
+            color: var(--text);
+            background:
+                radial-gradient(circle at 15% 15%, rgba(35, 213, 246, 0.16), transparent 35%),
+                radial-gradient(circle at 85% 5%, rgba(80, 110, 255, 0.12), transparent 30%),
+                linear-gradient(165deg, #070b11 0%, #0b0f14 45%, #0b1320 100%);
+            min-height: 100vh;
+        }
+
+        .page {
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 28px 18px 48px;
+        }
+
+        .header {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 18px;
+        }
+
+        .title {
+            margin: 0;
+            font-size: 22px;
+            letter-spacing: 0.4px;
+        }
+
+        .subtitle {
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .control {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        input[type="text"],
+        select,
+        button {
+            border-radius: 10px;
+            border: 1px solid var(--line);
+            background: var(--panel-2);
+            color: var(--text);
+            min-height: 44px;
+            padding: 0 12px;
+            font-size: 14px;
+        }
+
+        input[type="text"] {
+            width: 220px;
+        }
+
+        button {
+            cursor: pointer;
+            transition: 160ms ease;
+        }
+
+        button:hover {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-soft);
+        }
+
+        .btn-primary {
+            border-color: #1999b1;
+            background: linear-gradient(135deg, #0f6f82, #1089a2);
+        }
+
+        .note {
+            width: 100%;
+            color: var(--muted);
+            font-size: 12px;
+            font-family: var(--mono);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 370px 1fr;
+            gap: 18px;
+        }
+
+        .panel {
+            background: linear-gradient(160deg, rgba(18, 26, 38, 0.95), rgba(14, 22, 33, 0.95));
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .panel-head {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+
+        .tag {
+            color: var(--accent);
+            font-family: var(--mono);
+            font-size: 12px;
+        }
+
+        .h5-shell {
+            background: #05080d;
+            margin: 16px auto;
+            width: 338px;
+            min-height: 660px;
+            border: 1px solid #1c2b3f;
+            border-radius: 24px;
+            padding: 12px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+        }
+
+        .h5-top {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: rgba(5, 8, 13, 0.95);
+            backdrop-filter: blur(4px);
+            padding-bottom: 10px;
+        }
+
+        .h5-search {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+        }
+
+        .chips {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+            overflow: auto;
+            padding-bottom: 4px;
+        }
+
+        .chip {
+            border: 1px solid var(--line);
+            min-height: 34px;
+            border-radius: 999px;
+            padding: 6px 12px;
+            color: var(--muted);
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .chip.active {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-soft);
+        }
+
+        .list {
+            display: grid;
+            gap: 10px;
+            padding-top: 8px;
+        }
+
+        .card {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: rgba(17, 24, 36, 0.9);
+            padding: 10px;
+        }
+
+        .card-time {
+            color: #9ec6ff;
+            font-family: var(--mono);
+            font-size: 12px;
+        }
+
+        .card-content {
+            margin-top: 8px;
+            color: #d9e6ff;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .card-foot {
+            margin-top: 8px;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .card-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 12px;
+            min-height: 28px;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .web-shell {
+            padding: 14px;
+        }
+
+        .web-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .web-layout {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 12px;
+        }
+
+        .filters,
+        .results {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: rgba(16, 23, 35, 0.85);
+            padding: 12px;
+        }
+
+        .filter-group {
+            margin-bottom: 12px;
+        }
+
+        .filter-title {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 6px;
+            letter-spacing: 0.3px;
+        }
+
+        .filter-value {
+            min-height: 36px;
+            border: 1px dashed #2f425d;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            color: #bdd3f4;
+            font-size: 13px;
+        }
+
+        .result-item {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: rgba(11, 16, 24, 0.8);
+        }
+
+        .result-meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            font-family: var(--mono);
+            color: #9ec6ff;
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+
+        .result-text {
+            line-height: 1.65;
+            font-size: 14px;
+            color: #dce9ff;
+        }
+
+        .status {
+            margin-top: 6px;
+            min-height: 22px;
+            font-size: 12px;
+            color: var(--muted);
+            font-family: var(--mono);
+        }
+
+        .status.error {
+            color: var(--danger);
+        }
+
+        @media (max-width: 1024px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .h5-shell {
+                width: 100%;
+                max-width: 420px;
+            }
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            .panel,
+            .card,
+            .result-item {
+                animation: fade-up 220ms ease both;
+            }
+
+            @keyframes fade-up {
+                from {
+                    opacity: 0;
+                    transform: translateY(6px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+        }
+    </style>
+</head>
+<body>
+<main class="page">
+    <header class="header">
+        <div>
+            <h1 class="title">家教信息 UI 预览（H5 + Web）</h1>
+            <div class="subtitle">简洁极客风 · cyan 强调色 · 支持移动端与桌面端结构展示</div>
+        </div>
+        <div class="control">
+            <label>
+                <input id="keyword" type="text" placeholder="输入关键词（如 数学 / 海淀）">
+            </label>
+            <select id="sortOrder" aria-label="发布时间排序">
+                <option value="desc">最新优先</option>
+                <option value="asc">最早优先</option>
+            </select>
+            <button id="loadMock" type="button">加载示例</button>
+            <button id="loadApi" class="btn-primary" type="button">请求后端接口</button>
+            <div class="note">API: /h5/tutoring-info/page?pageNo=1&pageSize=8</div>
+        </div>
+    </header>
+
+    <section class="grid">
+        <div class="panel">
+            <div class="panel-head">
+                <span>H5 版本（手机卡片流）</span>
+                <span class="tag">mobile-first</span>
+            </div>
+            <div class="h5-shell">
+                <div class="h5-top">
+                    <div class="h5-search">
+                        <input type="text" value="北京 海淀 数学" readonly>
+                        <button type="button">筛选</button>
+                    </div>
+                    <div class="chips">
+                        <span class="chip active">年级</span>
+                        <span class="chip active">科目</span>
+                        <span class="chip">区域</span>
+                        <span class="chip">薪资</span>
+                        <span class="chip">时间</span>
+                    </div>
+                </div>
+                <div class="list" id="mobileList"></div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-head">
+                <span>Web 版本（筛选 + 列表）</span>
+                <span class="tag">desktop-density</span>
+            </div>
+            <div class="web-shell">
+                <div class="web-toolbar">
+                    <input id="webKeyword" type="text" readonly value="海淀 · 初二 · 数学">
+                    <select aria-label="排序方式">
+                        <option>发布时间：最新</option>
+                    </select>
+                    <button type="button">应用筛选</button>
+                </div>
+                <div class="web-layout">
+                    <aside class="filters">
+                        <div class="filter-group">
+                            <div class="filter-title">年级</div>
+                            <div class="filter-value">初二 / 初三</div>
+                        </div>
+                        <div class="filter-group">
+                            <div class="filter-title">科目</div>
+                            <div class="filter-value">数学</div>
+                        </div>
+                        <div class="filter-group">
+                            <div class="filter-title">区域</div>
+                            <div class="filter-value">海淀区</div>
+                        </div>
+                        <div class="filter-group">
+                            <div class="filter-title">薪资</div>
+                            <div class="filter-value">200-300/小时</div>
+                        </div>
+                    </aside>
+                    <section class="results" id="desktopList"></section>
+                </div>
+                <div id="status" class="status"></div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<script>
+    const mockRecords = [
+        {
+            id: 1001,
+            sourceUrl: "https://example.com/item/1001",
+            contentBlock: "【海淀】初二学生求数学家教，每周三次晚间辅导，要求有提分经验，沟通耐心。",
+            publishedAt: "2026-02-17T20:35:00"
+        },
+        {
+            id: 1002,
+            sourceUrl: "https://example.com/item/1002",
+            contentBlock: "【朝阳】高一英语口语与阅读提升，周末上课，薪资可面议，优先在职教师。",
+            publishedAt: "2026-02-17T18:10:00"
+        },
+        {
+            id: 1003,
+            sourceUrl: "https://example.com/item/1003",
+            contentBlock: "【西城】小学五年级全科托管，重点作业习惯培养，要求有小学带班经验。",
+            publishedAt: "2026-02-17T15:42:00"
+        }
+    ];
+
+    const mobileList = document.getElementById("mobileList");
+    const desktopList = document.getElementById("desktopList");
+    const statusNode = document.getElementById("status");
+
+    function formatTime(value) {
+        if (!value) {
+            return "--";
+        }
+        return String(value).replace("T", " ").slice(0, 16);
+    }
+
+    function renderLists(records) {
+        const safeRecords = Array.isArray(records) ? records : [];
+        if (!safeRecords.length) {
+            mobileList.innerHTML = "<div class=\"card\"><div class=\"card-content\">暂无匹配结果，请调整筛选条件。</div></div>";
+            desktopList.innerHTML = "<div class=\"result-item\"><div class=\"result-text\">暂无匹配结果，请调整筛选条件。</div></div>";
+            return;
+        }
+
+        mobileList.innerHTML = safeRecords.map(item => `
+            <article class="card">
+                <div class="card-time">${formatTime(item.publishedAt)}</div>
+                <div class="card-content">${item.contentBlock || "（无内容）"}</div>
+                <div class="card-foot"><a class="card-link" href="${item.sourceUrl || "#"}" target="_blank" rel="noreferrer">查看原文</a></div>
+            </article>
+        `).join("");
+
+        desktopList.innerHTML = safeRecords.map(item => `
+            <article class="result-item">
+                <div class="result-meta">
+                    <span>ID #${item.id || "-"}</span>
+                    <span>${formatTime(item.publishedAt)}</span>
+                </div>
+                <div class="result-text">${item.contentBlock || "（无内容）"}</div>
+                <div class="card-foot"><a class="card-link" href="${item.sourceUrl || "#"}" target="_blank" rel="noreferrer">查看原文</a></div>
+            </article>
+        `).join("");
+    }
+
+    function setStatus(text, isError = false) {
+        statusNode.textContent = text;
+        statusNode.classList.toggle("error", isError);
+    }
+
+    async function loadFromApi() {
+        const keyword = document.getElementById("keyword").value.trim();
+        const sortOrder = document.getElementById("sortOrder").value;
+        const query = new URLSearchParams({
+            pageNo: "1",
+            pageSize: "8",
+            sortOrder,
+            contentKeyword: keyword
+        });
+
+        setStatus("请求中...", false);
+        try {
+            // 直接调用后端分页接口，便于 UI 联调时快速验证结构。
+            const response = await fetch(`/h5/tutoring-info/page?${query.toString()}`);
+            const result = await response.json();
+            if (!response.ok || !result || result.success !== true) {
+                throw new Error(result && result.message ? result.message : "接口返回失败");
+            }
+
+            const pageData = result.data || {};
+            renderLists(pageData.records || []);
+            setStatus(`加载完成：共 ${pageData.total || 0} 条，当前展示 ${(pageData.records || []).length} 条`, false);
+        } catch (error) {
+            renderLists([]);
+            setStatus(`请求失败：${error.message}`, true);
+        }
+    }
+
+    document.getElementById("loadMock").addEventListener("click", () => {
+        renderLists(mockRecords);
+        setStatus("已加载本地示例数据", false);
+    });
+
+    document.getElementById("loadApi").addEventListener("click", loadFromApi);
+
+    renderLists(mockRecords);
+    setStatus("默认展示示例数据，可点击“请求后端接口”联调", false);
+</script>
+</body>
+</html>

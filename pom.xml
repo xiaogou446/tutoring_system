@@ -13,11 +13,11 @@
     <description>家教信息采集系统</description>
 
     <modules>
-        <module>facade</module>
-        <module>infrastructure</module>
-        <module>service</module>
-        <module>bootstrap</module>
-        <module>test</module>
+        <module>java/facade</module>
+        <module>java/infrastructure</module>
+        <module>java/service</module>
+        <module>java/bootstrap</module>
+        <module>java/test</module>
     </modules>
 
     <properties>
@@ -39,6 +39,16 @@
                 <version>${spring.boot.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.lin</groupId>
+                <artifactId>facade</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.lin</groupId>
+                <artifactId>service</artifactId>
+                <version>${project.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -64,6 +74,9 @@
                     <groupId>org.springframework.boot</groupId>
                     <artifactId>spring-boot-maven-plugin</artifactId>
                     <version>${spring.boot.version}</version>
+                    <configuration>
+                        <skip>true</skip>
+                    </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>
