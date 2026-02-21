@@ -3,6 +3,8 @@ from contextlib import closing
 import pymysql
 from pymysql.cursors import DictCursor
 
+from tutor_crawler.html_archive import store_html
+
 
 class MySQLCrawlStorage:
     def __init__(self, host: str, port: int, user: str, password: str, database: str):
@@ -30,6 +32,7 @@ class MySQLCrawlStorage:
             CREATE TABLE IF NOT EXISTS article_raw (
                 id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
                 source_url VARCHAR(512) NOT NULL UNIQUE COMMENT '文章原始URL',
+                platform_code VARCHAR(64) NOT NULL DEFAULT 'MIAOMIAO_WECHAT' COMMENT '来源平台编码',
                 title VARCHAR(512) NOT NULL DEFAULT '' COMMENT '文章标题',
                 content_html LONGTEXT NOT NULL COMMENT '文章原始HTML内容',
                 content_text LONGTEXT NOT NULL COMMENT '文章正文纯文本',
@@ -42,11 +45,13 @@ class MySQLCrawlStorage:
             """
             CREATE TABLE IF NOT EXISTS crawl_task (
                 id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
-                source_url VARCHAR(512) NOT NULL UNIQUE COMMENT '任务对应文章URL',
+                source_url VARCHAR(512) NOT NULL COMMENT '任务对应文章URL',
+                platform_code VARCHAR(64) NOT NULL DEFAULT 'MIAOMIAO_WECHAT' COMMENT '来源平台编码',
                 source_type VARCHAR(32) NOT NULL DEFAULT '' COMMENT '任务来源类型(AUTO/MANUAL)',
                 status VARCHAR(32) NOT NULL DEFAULT 'PENDING' COMMENT '任务状态(PENDING/RUNNING/SUCCESS/FAILED)',
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                UNIQUE KEY ux_crawl_task_source_platform (source_url, platform_code)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='抓取任务表'
             """,
             """
@@ -88,11 +93,102 @@ class MySQLCrawlStorage:
                 updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='家教结构化信息表'
             """,
+            """
+            CREATE TABLE IF NOT EXISTS crawl_platform (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+                platform_code VARCHAR(64) NOT NULL UNIQUE COMMENT '平台编码',
+                platform_name VARCHAR(128) NOT NULL DEFAULT '' COMMENT '平台名称',
+                status VARCHAR(32) NOT NULL DEFAULT 'ENABLED' COMMENT '平台状态',
+                description VARCHAR(512) NOT NULL DEFAULT '' COMMENT '平台描述',
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                KEY idx_status (status)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='采集平台主数据表'
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS admin_user (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+                username VARCHAR(64) NOT NULL UNIQUE COMMENT '管理员用户名',
+                password_hash VARCHAR(256) NOT NULL DEFAULT '' COMMENT '密码哈希',
+                status VARCHAR(32) NOT NULL DEFAULT 'ENABLED' COMMENT '账号状态',
+                last_login_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最后登录时间',
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                KEY idx_status (status)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='后台管理员账号表'
+            """,
         ]
         with closing(self._conn()) as conn:
             with conn.cursor() as cursor:
                 for sql in statements:
                     cursor.execute(sql)
+
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) AS c
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA=%s AND TABLE_NAME='article_raw' AND COLUMN_NAME='platform_code'
+                    """,
+                    (self.database,),
+                )
+                article_platform_column = cursor.fetchone()
+                if (
+                    int(article_platform_column["c"] if article_platform_column else 0)
+                    == 0
+                ):
+                    cursor.execute(
+                        """
+                        ALTER TABLE article_raw
+                        ADD COLUMN platform_code VARCHAR(64) NOT NULL DEFAULT 'MIAOMIAO_WECHAT' COMMENT '来源平台编码'
+                        AFTER source_url
+                        """
+                    )
+
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) AS c
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA=%s AND TABLE_NAME='crawl_task' AND COLUMN_NAME='platform_code'
+                    """,
+                    (self.database,),
+                )
+                task_platform_column = cursor.fetchone()
+                if int(task_platform_column["c"] if task_platform_column else 0) == 0:
+                    cursor.execute(
+                        """
+                        ALTER TABLE crawl_task
+                        ADD COLUMN platform_code VARCHAR(64) NOT NULL DEFAULT 'MIAOMIAO_WECHAT' COMMENT '来源平台编码'
+                        AFTER source_url
+                        """
+                    )
+
+                cursor.execute(
+                    """
+                    SELECT INDEX_NAME, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS cols
+                    FROM information_schema.STATISTICS
+                    WHERE TABLE_SCHEMA=%s AND TABLE_NAME='crawl_task' AND NON_UNIQUE=0
+                    GROUP BY INDEX_NAME
+                    """,
+                    (self.database,),
+                )
+                unique_indexes = cursor.fetchall() or []
+                has_composite_unique = False
+                for index in unique_indexes:
+                    cols = (index.get("cols") or "").lower()
+                    index_name = index.get("INDEX_NAME")
+                    if cols == "source_url,platform_code":
+                        has_composite_unique = True
+                        continue
+                    if cols == "source_url" and index_name and index_name != "PRIMARY":
+                        cursor.execute(
+                            f"ALTER TABLE crawl_task DROP INDEX `{index_name}`"
+                        )
+
+                if not has_composite_unique:
+                    cursor.execute(
+                        "CREATE UNIQUE INDEX ux_crawl_task_source_platform ON crawl_task(source_url, platform_code)"
+                    )
+
                 cursor.execute(
                     """
                     SELECT COUNT(*) AS c
@@ -101,7 +197,8 @@ class MySQLCrawlStorage:
                     """,
                     (self.database,),
                 )
-                if int(cursor.fetchone()["c"]) == 0:
+                content_block_column = cursor.fetchone()
+                if int(content_block_column["c"] if content_block_column else 0) == 0:
                     cursor.execute(
                         """
                         ALTER TABLE tutoring_info
@@ -109,24 +206,74 @@ class MySQLCrawlStorage:
                         AFTER source_url
                         """
                     )
+
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) AS c
+                    FROM information_schema.STATISTICS
+                    WHERE TABLE_SCHEMA=%s AND TABLE_NAME='article_raw' AND INDEX_NAME='ix_article_raw_platform_code'
+                    """,
+                    (self.database,),
+                )
+                article_platform_index = cursor.fetchone()
+                if (
+                    int(article_platform_index["c"] if article_platform_index else 0)
+                    == 0
+                ):
+                    cursor.execute(
+                        "CREATE INDEX ix_article_raw_platform_code ON article_raw(platform_code)"
+                    )
+
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) AS c
+                    FROM information_schema.STATISTICS
+                    WHERE TABLE_SCHEMA=%s AND TABLE_NAME='crawl_task' AND INDEX_NAME='ix_crawl_task_platform_code'
+                    """,
+                    (self.database,),
+                )
+                task_platform_index = cursor.fetchone()
+                if int(task_platform_index["c"] if task_platform_index else 0) == 0:
+                    cursor.execute(
+                        "CREATE INDEX ix_crawl_task_platform_code ON crawl_task(platform_code)"
+                    )
+                cursor.execute(
+                    """
+                    INSERT INTO crawl_platform(platform_code, platform_name, status, description)
+                    SELECT 'MIAOMIAO_WECHAT', '淼淼家教公众号', 'ENABLED', '默认平台'
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM crawl_platform WHERE platform_code='MIAOMIAO_WECHAT'
+                    )
+                    """
+                )
             conn.commit()
 
-    def create_task(self, source_url: str, source_type: str) -> int:
+    def create_task(
+        self,
+        source_url: str,
+        source_type: str,
+        platform_code: str = "MIAOMIAO_WECHAT",
+    ) -> int:
         with closing(self._conn()) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
-                    "INSERT INTO crawl_task(source_url, source_type, status) VALUES (%s, %s, 'PENDING')",
-                    (source_url, source_type),
+                    "INSERT INTO crawl_task(source_url, platform_code, source_type, status) VALUES (%s, %s, %s, 'PENDING')",
+                    (source_url, platform_code, source_type),
                 )
                 task_id = int(cursor.lastrowid)
             conn.commit()
             return task_id
 
-    def get_task_by_url(self, source_url: str):
+    def get_task_by_url(
+        self,
+        source_url: str,
+        platform_code: str = "MIAOMIAO_WECHAT",
+    ):
         with closing(self._conn()) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
-                    "SELECT * FROM crawl_task WHERE source_url=%s", (source_url,)
+                    "SELECT * FROM crawl_task WHERE source_url=%s AND platform_code=%s",
+                    (source_url, platform_code),
                 )
                 return cursor.fetchone()
 
@@ -174,13 +321,15 @@ class MySQLCrawlStorage:
                 return list(cursor.fetchall())
 
     def save_article(self, article: dict) -> None:
+        html_path = store_html(article["source_url"], article["content_html"])
         with closing(self._conn()) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
-                    INSERT INTO article_raw(source_url, title, content_html, content_text, published_at, crawled_at, updated_at)
-                    VALUES (%s, %s, %s, %s, IFNULL(NULLIF(%s, ''), CURRENT_TIMESTAMP), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    INSERT INTO article_raw(source_url, platform_code, title, content_html, content_text, published_at, crawled_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, IFNULL(NULLIF(%s, ''), CURRENT_TIMESTAMP), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     ON DUPLICATE KEY UPDATE
+                        platform_code=VALUES(platform_code),
                         title=VALUES(title),
                         content_html=VALUES(content_html),
                         content_text=VALUES(content_text),
@@ -190,8 +339,9 @@ class MySQLCrawlStorage:
                     """,
                     (
                         article["source_url"],
+                        article.get("platform_code", "MIAOMIAO_WECHAT"),
                         article["title"],
-                        article["content_html"],
+                        html_path,
                         article["content_text"],
                         article["published_at"],
                     ),
@@ -281,13 +431,19 @@ class MySQLCrawlStorage:
         with closing(self._conn()) as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT COUNT(*) AS c FROM article_raw")
-                return int(cursor.fetchone()["c"])
+                row = cursor.fetchone()
+                if not row:
+                    return 0
+                return int(row.get("c", 0))
 
     def count_tutoring_info(self) -> int:
         with closing(self._conn()) as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT COUNT(*) AS c FROM tutoring_info")
-                return int(cursor.fetchone()["c"])
+                row = cursor.fetchone()
+                if not row:
+                    return 0
+                return int(row.get("c", 0))
 
     def override_task_created_date(self, task_id: int, day: str) -> None:
         with closing(self._conn()) as conn:

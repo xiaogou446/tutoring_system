@@ -60,17 +60,22 @@ class TutoringInfoParser:
         source_url = article.get("source_url", "")
         html_blocks = self._split_candidate_blocks_from_html(html)
         text_blocks = self._split_candidate_blocks(text)
+        should_trim_block = True
 
         if len(html_blocks) >= 2:
             blocks = html_blocks
+            # HTML 分块已由 DOM 结构确定，content_block 保留原块文本，不再做内容裁剪。
+            should_trim_block = False
         elif text_blocks:
             blocks = text_blocks
         elif html_blocks:
             blocks = html_blocks
+            should_trim_block = False
         else:
             blocks = [text]
 
-        blocks = [self._trim_block_preamble(block) for block in blocks]
+        if should_trim_block:
+            blocks = [self._trim_block_preamble(block) for block in blocks]
         blocks = [block for block in blocks if block.strip()]
 
         parsed_items: list[dict] = []
@@ -214,6 +219,16 @@ class TutoringInfoParser:
         if not content_html:
             return []
 
+        exact_bg_blocks = TutoringInfoParser._split_blocks_from_background_style(
+            content_html, strict_signature=True
+        )
+        if len(exact_bg_blocks) >= 2:
+            return exact_bg_blocks
+
+        bg_blocks = TutoringInfoParser._split_blocks_from_background_style(content_html)
+        if len(bg_blocks) >= 2:
+            return bg_blocks
+
         field_hint = re.compile(
             r"(?:学员|学员信息|年级|科目|地址|地点|时间|补习时间|薪酬|薪资|薪水|课酬|时薪|要求|信息)"
         )
@@ -239,9 +254,11 @@ class TutoringInfoParser:
                     "section",
                     "article",
                 }
+                self.void_tags = {"br", "img", "meta", "link", "input", "hr"}
 
             def handle_starttag(self, tag: str, attrs) -> None:
-                self.depth += 1
+                if tag not in self.void_tags:
+                    self.depth += 1
                 attr_map = {key: value for key, value in attrs}
                 node_id = (attr_map.get("id") or "").strip().lower()
                 node_class = (attr_map.get("class") or "").strip().lower()
@@ -267,6 +284,9 @@ class TutoringInfoParser:
 
                 if self.current_block is not None and tag == "br":
                     self.current_block.append("\n")
+
+            def handle_startendtag(self, tag: str, attrs) -> None:
+                self.handle_starttag(tag, attrs)
 
             def handle_endtag(self, tag: str) -> None:
                 if self.current_block is not None and tag in self.line_break_tags:
@@ -322,6 +342,127 @@ class TutoringInfoParser:
                 continue
             seen.add(block)
             result.append(block)
+        return result
+
+    @staticmethod
+    def _split_blocks_from_background_style(
+        content_html: str, strict_signature: bool = False
+    ) -> list[str]:
+        signature_re = re.compile(
+            r"background-color\s*:\s*#e8f5ff\s*;\s*padding", flags=re.IGNORECASE
+        )
+
+        class _BackgroundColorBlockParser(HTMLParser):
+            def __init__(self) -> None:
+                super().__init__()
+                self.depth = 0
+                self.in_root = False
+                self.root_depth = 0
+                self.root_tag = ""
+                self.nodes: list[dict] = []
+                self.stack: list[dict] = []
+                self.break_tags = {
+                    "br",
+                    "p",
+                    "li",
+                    "tr",
+                    "div",
+                    "section",
+                    "article",
+                }
+                self.void_tags = {"br", "img", "meta", "link", "input", "hr"}
+
+            def _append_break_to_active_nodes(self) -> None:
+                if not self.in_root:
+                    return
+                for node in self.stack:
+                    if node["is_bg"]:
+                        node["parts"].append("\n")
+
+            def handle_starttag(self, tag: str, attrs) -> None:
+                if tag not in self.void_tags:
+                    self.depth += 1
+                attr_map = {key: value for key, value in attrs}
+                node_id = (attr_map.get("id") or "").strip().lower()
+                node_class = (attr_map.get("class") or "").strip().lower()
+
+                if not self.in_root and (
+                    node_id in {"js_content", "img-content"}
+                    or "js_content" in node_class
+                    or "img-content" in node_class
+                ):
+                    self.in_root = True
+                    self.root_depth = self.depth
+                    self.root_tag = tag
+
+                style = (attr_map.get("style") or "").lower()
+                if strict_signature:
+                    is_bg = self.in_root and bool(signature_re.search(style))
+                else:
+                    is_bg = self.in_root and ("background-color" in style)
+                if tag not in self.void_tags:
+                    self.stack.append(
+                        {"tag": tag, "depth": self.depth, "is_bg": is_bg, "parts": []}
+                    )
+
+                if tag in self.break_tags:
+                    self._append_break_to_active_nodes()
+
+            def handle_startendtag(self, tag: str, attrs) -> None:
+                self.handle_starttag(tag, attrs)
+
+            def handle_endtag(self, tag: str) -> None:
+                if tag in self.break_tags:
+                    self._append_break_to_active_nodes()
+
+                if self.stack:
+                    node = self.stack.pop()
+                    if node["is_bg"]:
+                        self.nodes.append(node)
+
+                if (
+                    self.in_root
+                    and self.depth == self.root_depth
+                    and tag == self.root_tag
+                ):
+                    self.in_root = False
+                    self.root_depth = 0
+                    self.root_tag = ""
+
+                self.depth = max(0, self.depth - 1)
+
+            def handle_data(self, data: str) -> None:
+                if not self.in_root:
+                    return
+                text = data.strip()
+                if not text:
+                    return
+                for node in self.stack:
+                    if node["is_bg"]:
+                        node["parts"].append(text)
+
+        parser = _BackgroundColorBlockParser()
+        parser.feed(content_html)
+
+        normalized_nodes: list[tuple[str, str]] = []
+        for node in parser.nodes:
+            raw = "".join(node["parts"])
+            lines = [line.strip() for line in raw.split("\n") if line.strip()]
+            if not lines:
+                continue
+            merged = "\n".join(lines)
+            compact = re.sub(r"\s+", "", merged)
+            normalized_nodes.append((merged, compact))
+
+        # 命中目标样式后，仅做文本去重，不叠加额外筛选规则。
+        result: list[str] = []
+        seen_compact: set[str] = set()
+        for text, compact in normalized_nodes:
+            if compact in seen_compact:
+                continue
+            result.append(text)
+            seen_compact.add(compact)
+
         return result
 
     @staticmethod

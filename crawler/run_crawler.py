@@ -23,6 +23,11 @@ def main() -> None:
         "--mysql-database", default="tutoring_crawler", help="MySQL 数据库"
     )
     parser.add_argument("--list-url", required=True, help="公众号列表页 URL")
+    parser.add_argument(
+        "--platform-code",
+        default="MIAOMIAO_WECHAT",
+        help="平台编码，默认 MIAOMIAO_WECHAT",
+    )
     parser.add_argument("--include-pattern", default="", help="文章 URL 过滤正则")
     parser.add_argument("--retry-task-id", type=int, default=0, help="重试失败任务 ID")
     parser.add_argument(
@@ -117,6 +122,7 @@ def main() -> None:
     result = service.run_daily_scan(
         list_url=args.list_url,
         include_pattern=args.include_pattern or None,
+        platform_code=args.platform_code,
     )
     print(result)
 

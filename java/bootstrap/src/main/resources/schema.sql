@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS article_raw (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     source_url VARCHAR(1024) NOT NULL DEFAULT '' COMMENT '文章来源URL',
+    platform_code VARCHAR(64) NOT NULL DEFAULT 'MIAOMIAO_WECHAT' COMMENT '来源平台编码',
     title VARCHAR(512) NOT NULL DEFAULT '' COMMENT '文章标题',
     content_html CLOB NOT NULL DEFAULT '' COMMENT '文章HTML正文',
     content_text CLOB NOT NULL DEFAULT '' COMMENT '文章纯文本正文',
@@ -14,6 +15,7 @@ CREATE TABLE IF NOT EXISTS article_raw (
 ) COMMENT='原始文章采集表';
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_article_raw_source_url ON article_raw(source_url);
+CREATE INDEX IF NOT EXISTS ix_article_raw_platform_code ON article_raw(platform_code);
 CREATE INDEX IF NOT EXISTS ix_article_raw_published_at ON article_raw(published_at);
 
 CREATE TABLE IF NOT EXISTS tutoring_info (
@@ -57,13 +59,15 @@ CREATE INDEX IF NOT EXISTS ix_tutoring_info_salary_text ON tutoring_info(salary_
 CREATE TABLE IF NOT EXISTS crawl_task (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     source_url VARCHAR(1024) NOT NULL DEFAULT '' COMMENT '采集目标URL',
+    platform_code VARCHAR(64) NOT NULL DEFAULT 'MIAOMIAO_WECHAT' COMMENT '来源平台编码',
     source_type VARCHAR(32) NOT NULL DEFAULT '' COMMENT '来源类型',
     status VARCHAR(32) NOT NULL DEFAULT '' COMMENT '任务状态',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
 ) COMMENT='采集任务主表';
 
-CREATE UNIQUE INDEX IF NOT EXISTS ux_crawl_task_source_url ON crawl_task(source_url);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_crawl_task_source_platform ON crawl_task(source_url, platform_code);
+CREATE INDEX IF NOT EXISTS ix_crawl_task_platform_code ON crawl_task(platform_code);
 CREATE INDEX IF NOT EXISTS ix_crawl_task_source_type ON crawl_task(source_type);
 CREATE INDEX IF NOT EXISTS ix_crawl_task_status ON crawl_task(status);
 CREATE INDEX IF NOT EXISTS ix_crawl_task_created_at ON crawl_task(created_at);
@@ -84,3 +88,35 @@ CREATE TABLE IF NOT EXISTS crawl_task_log (
 CREATE INDEX IF NOT EXISTS ix_crawl_task_log_task_id ON crawl_task_log(task_id);
 CREATE INDEX IF NOT EXISTS ix_crawl_task_log_status ON crawl_task_log(status);
 CREATE INDEX IF NOT EXISTS ix_crawl_task_log_created_at ON crawl_task_log(created_at);
+
+CREATE TABLE IF NOT EXISTS crawl_platform (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    platform_code VARCHAR(64) NOT NULL DEFAULT '' COMMENT '平台编码',
+    platform_name VARCHAR(128) NOT NULL DEFAULT '' COMMENT '平台名称',
+    status VARCHAR(32) NOT NULL DEFAULT 'ENABLED' COMMENT '平台状态',
+    description VARCHAR(512) NOT NULL DEFAULT '' COMMENT '平台描述',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
+) COMMENT='采集平台主数据表';
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_crawl_platform_code ON crawl_platform(platform_code);
+CREATE INDEX IF NOT EXISTS ix_crawl_platform_status ON crawl_platform(status);
+
+INSERT INTO crawl_platform(platform_code, platform_name, status, description)
+SELECT 'MIAOMIAO_WECHAT', '淼淼家教公众号', 'ENABLED', '默认平台'
+WHERE NOT EXISTS (
+    SELECT 1 FROM crawl_platform WHERE platform_code = 'MIAOMIAO_WECHAT'
+);
+
+CREATE TABLE IF NOT EXISTS admin_user (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(64) NOT NULL DEFAULT '' COMMENT '管理员用户名',
+    password_hash VARCHAR(256) NOT NULL DEFAULT '' COMMENT '密码哈希',
+    status VARCHAR(32) NOT NULL DEFAULT 'ENABLED' COMMENT '账号状态',
+    last_login_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最后登录时间',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
+) COMMENT='后台管理员账号表';
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_admin_user_username ON admin_user(username);
+CREATE INDEX IF NOT EXISTS ix_admin_user_status ON admin_user(status);

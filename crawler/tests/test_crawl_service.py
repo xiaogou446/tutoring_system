@@ -1,6 +1,7 @@
 import sys
 import tempfile
 import unittest
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -9,8 +10,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tutor_crawler.article import parse_article_html
 from tutor_crawler.fetcher import HttpFetcher
 from tutor_crawler.parser import TutoringInfoParser
+from tutor_crawler.platform_router import PlatformParserRouter
 from tutor_crawler.service import CrawlService
 from tutor_crawler.storage import CrawlStorage
+from import_articles import _load_article_from_raw
 
 
 class FakeFetcher:
@@ -43,11 +46,34 @@ class CrawlServiceTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.db_path = Path(self.tempdir.name) / "crawler.db"
+        self.html_archive_dir = Path(self.tempdir.name) / "html-archive"
+        self._old_html_archive_env = os.environ.get("TUTOR_CRAWLER_HTML_DIR")
+        os.environ["TUTOR_CRAWLER_HTML_DIR"] = str(self.html_archive_dir)
         self.storage = CrawlStorage(str(self.db_path))
         self.storage.init_db()
 
     def tearDown(self) -> None:
+        if self._old_html_archive_env is None:
+            os.environ.pop("TUTOR_CRAWLER_HTML_DIR", None)
+        else:
+            os.environ["TUTOR_CRAWLER_HTML_DIR"] = self._old_html_archive_env
         self.tempdir.cleanup()
+
+    def _article_platform_code(self, source_url: str) -> str:
+        with self.storage._conn() as conn:  # noqa: SLF001 - test helper
+            row = conn.execute(
+                "SELECT platform_code FROM article_raw WHERE source_url=?",
+                (source_url,),
+            ).fetchone()
+            return row["platform_code"] if row else ""
+
+    def _task_count_by_url(self, source_url: str) -> int:
+        with self.storage._conn() as conn:  # noqa: SLF001 - test helper
+            row = conn.execute(
+                "SELECT COUNT(*) AS c FROM crawl_task WHERE source_url=?",
+                (source_url,),
+            ).fetchone()
+            return int(row["c"] if row else 0)
 
     def test_daily_scan_should_create_increment_tasks_and_parse(self):
         list_url = "https://example.com/list"
@@ -150,7 +176,9 @@ class CrawlServiceTest(unittest.TestCase):
         self.assertEqual(parsed["district"], "")
         self.assertEqual(parsed["teacher_requirement"], "")
 
-    def test_non_tutoring_article_should_not_insert_empty_tutoring_info(self):
+    def test_non_tutoring_article_should_persist_article_but_skip_empty_tutoring_info(
+        self,
+    ):
         list_url = "https://example.com/list-empty"
         article_url = "https://example.com/a-empty"
         list_html = '<a href="https://example.com/a-empty">a-empty</a>'
@@ -168,7 +196,7 @@ class CrawlServiceTest(unittest.TestCase):
 
         result = service.run_daily_scan(list_url)
         self.assertEqual(result["failed"], 1)
-        self.assertEqual(self.storage.count_articles(), 0)
+        self.assertEqual(self.storage.count_articles(), 1)
         self.assertEqual(self.storage.count_tutoring_info(), 0)
 
     def test_retry_should_append_logs_and_mark_success(self):
@@ -514,6 +542,39 @@ class CrawlServiceTest(unittest.TestCase):
         self.assertIn("<<<ITEM_BREAK>>>", article["content_text"])
         self.assertTrue(article["content_text"].startswith("<<<ITEM_BREAK>>>"))
 
+    def test_article_content_text_should_prefer_parser_html_blocks(self):
+        html = """
+            <html><body>
+                <div id="js_content">
+                    <div>
+                        <p>家教地址：临平区朗诗·未来街区东园西北36米</p>
+                        <p>辅导科目：四年级 数学</p>
+                    </div>
+                    <section style="background-color: #e8f5ff;padding: 6px 10px;">
+                        <p>家教地址：西湖区浙江音乐学院</p>
+                        <p>辅导科目：政治学考</p>
+                        <p>学员情况：高二</p>
+                    </section>
+                    <section style="background-color: #e8f5ff;padding: 6px 10px;">
+                        <p>地址: 滨江区建业路地铁站</p>
+                        <p>性别年级科目: 男初一全科</p>
+                        <p>补习时间：周一到周日</p>
+                    </section>
+                </div>
+            </body></html>
+        """
+
+        article = parse_article_html("https://example.com/prefer-parser-blocks", html)
+        blocks = [
+            block.strip()
+            for block in article["content_text"].split("<<<ITEM_BREAK>>>")
+            if block.strip()
+        ]
+
+        self.assertEqual(2, len(blocks))
+        self.assertIn("学员情况：高二", blocks[0])
+        self.assertNotIn("临平区朗诗·未来街区东园西北36米", blocks[0])
+
     def test_article_content_text_should_trim_head_and_tail_noise_for_single_block(
         self,
     ):
@@ -742,6 +803,197 @@ class CrawlServiceTest(unittest.TestCase):
         self.assertFalse(svc_empty.process_task(task_id))
         kept = self.storage.get_tutoring_info_by_url(article_url)
         self.assertEqual(kept["grade"], "初一")
+
+    def test_daily_scan_should_write_platform_code_to_task_and_article(self):
+        list_url = "https://example.com/list-platform"
+        article_url = "https://example.com/platform-a1"
+        list_html = f'<a href="{article_url}">a1</a>'
+        article_html = """
+            <html><head><title>平台测试</title></head>
+            <body>城市：杭州 科目：数学 薪资：100元/2小时</body></html>
+        """
+
+        service = CrawlService(
+            storage=self.storage,
+            list_fetcher=FakeFetcher({list_url: list_html}),
+            article_fetcher=FakeFetcher({article_url: article_html}),
+            parser=TutoringInfoParser(),
+        )
+
+        result = service.run_daily_scan(
+            list_url=list_url,
+            platform_code="MIAOMIAO_WECHAT",
+        )
+
+        self.assertEqual(result["succeeded"], 1)
+        task = self.storage.get_task_by_url(article_url)
+        self.assertIsNotNone(task)
+        self.assertEqual(task["platform_code"], "MIAOMIAO_WECHAT")
+        self.assertEqual(
+            self._article_platform_code(article_url),
+            "MIAOMIAO_WECHAT",
+        )
+
+    def test_save_article_should_store_html_relative_path_and_write_file(self):
+        article_url = "https://example.com/article-html-path"
+        html = "<html><body><div id='js_content'>城市：杭州</div></body></html>"
+        article = {
+            "source_url": article_url,
+            "platform_code": "MIAOMIAO_WECHAT",
+            "title": "HTML 存储路径测试",
+            "content_html": html,
+            "content_text": "城市：杭州",
+            "published_at": "",
+        }
+
+        self.storage.save_article(article)
+
+        with self.storage._conn() as conn:  # noqa: SLF001 - test helper
+            row = conn.execute(
+                "SELECT content_html FROM article_raw WHERE source_url=?",
+                (article_url,),
+            ).fetchone()
+
+        stored_value = row["content_html"]
+        self.assertTrue(stored_value.startswith("data/html/"))
+        html_file = self.html_archive_dir / Path(stored_value).name
+        self.assertTrue(html_file.exists())
+        self.assertEqual(html_file.read_text(encoding="utf-8"), html)
+
+    def test_load_article_from_raw_should_restore_html_from_stored_relative_path(self):
+        article_url = "https://example.com/article-restore-html"
+        html = "<html><body><div id='js_content'>地址：西湖区</div></body></html>"
+        article = {
+            "source_url": article_url,
+            "platform_code": "MIAOMIAO_WECHAT",
+            "title": "HTML 回放测试",
+            "content_html": html,
+            "content_text": "地址：西湖区",
+            "published_at": "",
+        }
+
+        self.storage.save_article(article)
+        loaded = _load_article_from_raw(self.storage, article_url)
+
+        self.assertIsNotNone(loaded)
+        self.assertEqual(loaded["content_html"], html)
+
+    def test_daily_scan_should_support_same_url_across_different_platforms(self):
+        list_url = "https://example.com/list-platform-idempotent"
+        article_url = "https://example.com/platform-same-url"
+        list_html = f'<a href="{article_url}">a1</a>'
+        article_html = """
+            <html><head><title>幂等测试</title></head>
+            <body>城市：杭州 科目：数学 薪资：100元/2小时</body></html>
+        """
+
+        service = CrawlService(
+            storage=self.storage,
+            list_fetcher=FakeFetcher({list_url: list_html}),
+            article_fetcher=FakeFetcher({article_url: article_html}),
+            parser=TutoringInfoParser(),
+        )
+
+        result_a = service.run_daily_scan(
+            list_url=list_url,
+            platform_code="MIAOMIAO_WECHAT",
+        )
+        result_b = service.run_daily_scan(
+            list_url=list_url,
+            platform_code="ALT_PLATFORM",
+        )
+
+        self.assertEqual(result_a["created_tasks"], 1)
+        self.assertEqual(result_b["created_tasks"], 1)
+        self.assertEqual(self._task_count_by_url(article_url), 2)
+        self.assertIsNotNone(
+            self.storage.get_task_by_url(article_url, "MIAOMIAO_WECHAT")
+        )
+        self.assertIsNotNone(self.storage.get_task_by_url(article_url, "ALT_PLATFORM"))
+
+    def test_process_task_should_fail_when_platform_not_supported(self):
+        article_url = "https://example.com/unsupported-platform"
+        task_id = self.storage.create_task(
+            article_url,
+            "MANUAL",
+            platform_code="UNSUPPORTED_PLATFORM",
+        )
+        service = CrawlService(
+            storage=self.storage,
+            list_fetcher=FakeFetcher({}),
+            article_fetcher=FakeFetcher(
+                {
+                    article_url: "<html><body>城市：杭州 科目：数学</body></html>",
+                }
+            ),
+            parser=TutoringInfoParser(),
+        )
+
+        self.assertFalse(service.process_task(task_id))
+        task = self.storage.get_task(task_id)
+        self.assertEqual(task["status"], "FAILED")
+        logs = self.storage.list_task_logs(task_id)
+        self.assertTrue(
+            any(log["error_type"] == "UNSUPPORTED_PLATFORM" for log in logs)
+        )
+
+    def test_process_task_should_route_parser_by_platform_code(self):
+        article_url = "https://example.com/platform-route"
+        task_id = self.storage.create_task(
+            article_url,
+            "MANUAL",
+            platform_code="ALT_PLATFORM",
+        )
+
+        class _AltParser:
+            def parse(self, article):
+                return self.parse_many(article)[0]
+
+            def parse_many(self, article):
+                return [
+                    {
+                        "source_url": article["source_url"],
+                        "published_at": article.get("published_at", ""),
+                        "content_block": article.get("content_text", ""),
+                        "city": "杭州",
+                        "district": "",
+                        "grade": "初二",
+                        "subject": "物理",
+                        "address": "西湖区",
+                        "time_schedule": "周末",
+                        "salary_text": "120/2h",
+                        "teacher_requirement": "有经验",
+                        "city_snippet": "杭州",
+                        "district_snippet": "",
+                        "grade_snippet": "初二",
+                        "subject_snippet": "物理",
+                        "address_snippet": "西湖区",
+                        "time_schedule_snippet": "周末",
+                        "salary_snippet": "120/2h",
+                        "teacher_requirement_snippet": "有经验",
+                    }
+                ]
+
+        router = PlatformParserRouter()
+        router.register("MIAOMIAO_WECHAT", TutoringInfoParser())
+        router.register("ALT_PLATFORM", _AltParser())
+
+        service = CrawlService(
+            storage=self.storage,
+            list_fetcher=FakeFetcher({}),
+            article_fetcher=FakeFetcher(
+                {
+                    article_url: "<html><body>this body should be ignored by alt parser</body></html>",
+                }
+            ),
+            parser=TutoringInfoParser(),
+            parser_router=router,
+        )
+
+        self.assertTrue(service.process_task(task_id))
+        parsed = self.storage.get_tutoring_info_by_url(article_url)
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed["subject"], "物理")
 
 
 if __name__ == "__main__":

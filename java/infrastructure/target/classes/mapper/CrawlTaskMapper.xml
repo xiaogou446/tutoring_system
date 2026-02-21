@@ -2,4 +2,49 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.lin.webtemplate.infrastructure.mapper.CrawlTaskMapper">
 
+    <resultMap id="CrawlTaskResultMap" type="com.lin.webtemplate.infrastructure.dataobject.CrawlTaskDO">
+        <id column="id" property="id"/>
+        <result column="source_url" property="sourceUrl"/>
+        <result column="platform_code" property="platformCode"/>
+        <result column="source_type" property="sourceType"/>
+        <result column="status" property="status"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.lin.webtemplate.infrastructure.dataobject.CrawlTaskDO"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO crawl_task(source_url, platform_code, source_type, status, created_at, updated_at)
+        VALUES (#{sourceUrl}, #{platformCode}, #{sourceType}, #{status}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    </insert>
+
+    <select id="selectById" resultMap="CrawlTaskResultMap">
+        SELECT id, source_url, platform_code, source_type, status, created_at, updated_at
+          FROM crawl_task
+         WHERE id = #{id}
+    </select>
+
+    <select id="selectBySourceUrlAndPlatform" resultMap="CrawlTaskResultMap">
+        SELECT id, source_url, platform_code, source_type, status, created_at, updated_at
+          FROM crawl_task
+         WHERE source_url = #{sourceUrl}
+           AND platform_code = #{platformCode}
+    </select>
+
+    <select id="selectByIds" resultMap="CrawlTaskResultMap">
+        SELECT id, source_url, platform_code, source_type, status, created_at, updated_at
+          FROM crawl_task
+         WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <update id="updateStatus">
+        UPDATE crawl_task
+           SET status = #{status},
+               updated_at = CURRENT_TIMESTAMP
+         WHERE id = #{id}
+    </update>
+
 </mapper>

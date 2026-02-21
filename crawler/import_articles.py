@@ -3,6 +3,7 @@ import json
 from contextlib import closing
 
 from tutor_crawler.fetcher import HttpFetcher
+from tutor_crawler.html_archive import read_html
 from tutor_crawler.llm_client import RelayLlmClient
 from tutor_crawler.llm_parser import LlmTutoringInfoParser
 from tutor_crawler.parser import TutoringInfoParser
@@ -59,11 +60,11 @@ def _get_db_row_count(storage, source_url: str) -> int:
 
 def _load_article_from_raw(storage, source_url: str) -> dict | None:
     sql_mysql = (
-        "SELECT source_url, title, content_html, content_text, published_at "
+        "SELECT source_url, platform_code, title, content_html, content_text, published_at "
         "FROM article_raw WHERE source_url=%s"
     )
     sql_sqlite = (
-        "SELECT source_url, title, content_html, content_text, published_at "
+        "SELECT source_url, platform_code, title, content_html, content_text, published_at "
         "FROM article_raw WHERE source_url=?"
     )
     sql = sql_mysql if hasattr(storage, "database") else sql_sqlite
@@ -73,7 +74,12 @@ def _load_article_from_raw(storage, source_url: str) -> dict | None:
         cursor.execute(sql, (source_url,))
         row = cursor.fetchone()
         cursor.close()
-        return row
+        if not row:
+            return None
+
+        article = dict(row)
+        article["content_html"] = read_html(article.get("content_html", ""))
+        return article
 
 
 def _process_from_article_raw(service: CrawlService, task_id: int) -> bool:
@@ -82,46 +88,77 @@ def _process_from_article_raw(service: CrawlService, task_id: int) -> bool:
         return False
 
     source_url = task["source_url"]
+    platform_code = "MIAOMIAO_WECHAT"
+    if hasattr(task, "keys") and "platform_code" in task.keys():
+        platform_code = task["platform_code"] or "MIAOMIAO_WECHAT"
     service.storage.update_task_status(task_id, "RUNNING")
-    service.storage.add_task_log(task_id, "FETCH", "SUCCESS", "", "from article_raw")
+    service.storage.add_task_log(task_id, "FETCH", "RUNNING")
 
-    article = _load_article_from_raw(service.storage, source_url)
-    if not article:
+    try:
+        parser = service.resolve_parser(platform_code)
+        if not parser:
+            service.storage.add_task_log(
+                task_id,
+                "PARSE",
+                "FAILED",
+                "UNSUPPORTED_PLATFORM",
+                f"unsupported platform_code: {platform_code}",
+            )
+            service.storage.update_task_status(task_id, "FAILED")
+            return False
+
+        article = _load_article_from_raw(service.storage, source_url)
+        if not article:
+            service.storage.add_task_log(
+                task_id,
+                "FETCH",
+                "FAILED",
+                "ARTICLE_NOT_FOUND",
+                "article_raw not found",
+            )
+            service.storage.update_task_status(task_id, "FAILED")
+            return False
+
         service.storage.add_task_log(
-            task_id,
-            "PARSE",
-            "FAILED",
-            "ARTICLE_NOT_FOUND",
-            "article_raw not found",
+            task_id, "FETCH", "SUCCESS", "", "from article_raw"
+        )
+
+        article_platform_code = platform_code
+        if hasattr(article, "keys") and "platform_code" in article.keys():
+            article_platform_code = article["platform_code"] or platform_code
+        article["platform_code"] = article_platform_code
+
+        service.storage.add_task_log(task_id, "PARSE", "RUNNING")
+        infos = (
+            parser.parse_many(article)
+            if hasattr(parser, "parse_many")
+            else [parser.parse(article)]
+        )
+        infos = [info for info in infos if service._is_meaningful_info(info)]
+        if not infos:
+            service.storage.add_task_log(
+                task_id,
+                "PARSE",
+                "FAILED",
+                "EMPTY_PARSED_RESULT",
+                "no meaningful parsed fields",
+            )
+            service.storage.update_task_status(task_id, "FAILED")
+            return False
+
+        service.storage.delete_tutoring_info_by_article(source_url)
+        for info in infos:
+            service.storage.save_tutoring_info(info)
+
+        service.storage.add_task_log(task_id, "PARSE", "SUCCESS")
+        service.storage.update_task_status(task_id, "SUCCESS")
+        return True
+    except Exception as ex:  # noqa: BLE001
+        service.storage.add_task_log(
+            task_id, "EXECUTE", "FAILED", "RUNTIME_ERROR", str(ex)
         )
         service.storage.update_task_status(task_id, "FAILED")
         return False
-
-    service.storage.add_task_log(task_id, "PARSE", "RUNNING")
-    infos = (
-        service.parser.parse_many(article)
-        if hasattr(service.parser, "parse_many")
-        else [service.parser.parse(article)]
-    )
-    infos = [info for info in infos if service._is_meaningful_info(info)]
-    if not infos:
-        service.storage.add_task_log(
-            task_id,
-            "PARSE",
-            "FAILED",
-            "EMPTY_PARSED_RESULT",
-            "no meaningful parsed fields",
-        )
-        service.storage.update_task_status(task_id, "FAILED")
-        return False
-
-    service.storage.delete_tutoring_info_by_article(source_url)
-    for info in infos:
-        service.storage.save_tutoring_info(info)
-
-    service.storage.add_task_log(task_id, "PARSE", "SUCCESS")
-    service.storage.update_task_status(task_id, "SUCCESS")
-    return True
 
 
 def main() -> None:
@@ -140,6 +177,11 @@ def main() -> None:
         default="MANUAL",
         choices=["MANUAL", "AUTO"],
         help="新建任务来源类型",
+    )
+    parser.add_argument(
+        "--platform-code",
+        default="MIAOMIAO_WECHAT",
+        help="平台编码，默认 MIAOMIAO_WECHAT",
     )
     parser.add_argument(
         "--db-type", default="sqlite", choices=["sqlite", "mysql"], help="数据库类型"
@@ -217,11 +259,15 @@ def main() -> None:
     results: list[dict] = []
     success_count = 0
     for source_url in urls:
-        task = storage.get_task_by_url(source_url)
+        task = storage.get_task_by_url(source_url, args.platform_code)
         task_id = (
             int(task["id"])
             if task
-            else storage.create_task(source_url, args.source_type)
+            else storage.create_task(
+                source_url,
+                args.source_type,
+                platform_code=args.platform_code,
+            )
         )
 
         ok = (

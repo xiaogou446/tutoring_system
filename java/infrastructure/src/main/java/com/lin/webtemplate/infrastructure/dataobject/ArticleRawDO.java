@@ -22,6 +22,9 @@ public class ArticleRawDO {
     /** 文章来源URL，作为幂等键。 */
     private String sourceUrl;
 
+    /** 平台编码。 */
+    private String platformCode;
+
     /** 文章标题。 */
     private String title;
 

@@ -1,203 +1,147 @@
 # AGENTS.md
 
-Guidance for coding agents working in this repository.
+面向本仓库的 agent 执行规范（Java + Vue + Python crawler）。
 
-## 0) Language policy
+## 0) 语言与文档策略
 
-- All assistant-user conversations must be in Chinese.
-- All newly written project documentation must be in Chinese (keep code symbols, API names, and third-party proper nouns in original form where needed).
-- If existing files are in English, append or update content in Chinese unless external constraints require English.
+- 所有 assistant 与用户对话必须使用中文。
+- 所有新增项目文档默认使用中文（代码符号、API 名、第三方专有名词可保留原文）。
+- 修改英文文档时，优先追加或改写为中文说明，除非外部规范要求英文。
 
-## 0.5) Java 通用强制规范（适用于后续新建 Java 项目）
+## 1) 仓库结构速览
 
-- 本节为跨项目复用的强制约定；新建 Java 项目默认继承，除非有明确书面例外。
-- Spring 依赖注入统一使用 `@Resource`；非特殊场景不使用构造器注入或 `@Autowired`。
-- 命名约定：Mapper 层返回对象使用 `DO`；领域层返回对象使用 `Model`；除框架强约束外不使用 `Entity` 作为业务对象命名。
-- 数据对象（DO/Model/DTO/VO）中每个属性都必须有注释（推荐字段级 Javadoc），说明字段含义、单位或取值约束。
-- SQL DDL 约定：业务字段默认 `NOT NULL` 且必须提供 `DEFAULT` 默认值，避免空值语义不清。
-- SQL 注释约定：每张表和每个字段必须有备注；优先在 `CREATE TABLE` 语句内使用 `COMMENT`（表注释 + 列注释）。
+- 后端：Maven 多模块，Java 17，Spring Boot 3.3.x。
+- 模块顺序：`java/facade` → `java/infrastructure` → `java/service` → `java/bootstrap` → `java/test`。
+- 启动模块：`java/bootstrap`。
+- 主启动类：`java/bootstrap/src/main/java/com/lin/webtemplate/WebTemplateApplication.java`。
+- Web 前端：`web/`（Vue3 + Vite）。
+- 爬虫：`crawler/`（Python，支持 SQLite/MySQL，含每日调度）。
+- 默认后端端口：`8081`。
 
-## 1) Project shape
+## 2) 构建、运行、测试命令（从仓库根目录执行）
 
-- Build tool: Maven multi-module project.
-- Java version: 17.
-- Parent POM: `pom.xml`.
-- Modules (reactor order): `java/facade`, `java/infrastructure`, `java/service`, `java/bootstrap`, `java/test`.
-- Runtime app module: `java/bootstrap` (Spring Boot).
-- Main entrypoint: `java/bootstrap/src/main/java/com/lin/webtemplate/WebTemplateApplication.java`.
-- Web/controller code currently lives in `java/service` and is picked up by component scanning.
-- Tests currently live in `java/bootstrap/src/test/java`.
-- Maven 本地仓库统一使用全局配置（`~/.m2/repository` 或 `settings.xml` 指定路径），禁止在项目内通过 `.mvn/maven.config` 或命令参数重定向到工作区。
+### 2.1 Java 后端
 
-## 2) Canonical commands
+- 全量打包（跳过测试）：`mvn clean package -DskipTests`
+- 全量校验（含测试）：`mvn clean verify`
+- 仅构建启动模块及其依赖：`mvn -pl java/bootstrap -am package -DskipTests`
+- 启动后端：`mvn -pl java/bootstrap -am spring-boot:run`
 
-Run commands from repository root unless noted.
+### 2.2 Java 测试（重点：单测单例）
 
-### Build
+- 全量测试：`mvn test`
+- 仅执行 `java/test` 模块测试：
+  `mvn -pl java/test -am test -Dsurefire.failIfNoSpecifiedTests=false`
+- 执行单个测试类（示例）：
+  `mvn -pl java/test -am -Dtest=TutoringInfoQueryControllerTest test -Dsurefire.failIfNoSpecifiedTests=false`
+- 执行单个测试方法（示例）：
+  `mvn -pl java/test -am -Dtest=TutoringInfoQueryControllerTest#pageQuery_shouldSupportFuzzyFilterAndDescSort test -Dsurefire.failIfNoSpecifiedTests=false`
+- 若上游模块出现“无匹配测试”提示，保留：
+  `-Dsurefire.failIfNoSpecifiedTests=false`
 
-- Full compile/package (skip tests):
-  - `mvn clean package -DskipTests`
-- Full verification (includes tests):
-  - `mvn clean verify`
-- Build only one module plus required upstream modules:
-  - `mvn -pl java/bootstrap -am package -DskipTests`
+### 2.3 前端（web）
 
-### Test
+- 安装依赖：`cd web && npm ci`
+- 本地开发：`cd web && npm run dev`
+- 生产构建：`cd web && npm run build`
+- 本地预览构建产物：`cd web && npm run preview`
+- 说明：当前 `package.json` 未配置 lint/test 脚本；若新增请同步更新本文件。
 
-- Run all tests in all modules:
-  - `mvn test`
-- Run tests only in one module:
-- Run tests only in one module:
-  - `mvn -pl java/bootstrap -am test -Dsurefire.failIfNoSpecifiedTests=false`
-- Run a single test class:
-  - `mvn -pl java/bootstrap -am -Dtest=HeartbeatControllerTest test -Dsurefire.failIfNoSpecifiedTests=false`
-- Run a single test method (preferred pattern):
-  - `mvn -pl java/bootstrap -am -Dtest=HeartbeatControllerTest#actuatorHealth_shouldBeAvailable test -Dsurefire.failIfNoSpecifiedTests=false`
-- If Maven says no matching tests in other modules, keep `-Dsurefire.failIfNoSpecifiedTests=false`.
+### 2.4 Python 爬虫（crawler）
 
-### Lint / formatting / static analysis
+- 安装依赖（当前最小）：`pip3 install pymysql`
+- 单次采集（MySQL 示例）：
+  `python3 crawler/run_crawler.py --db-type mysql --mysql-host 127.0.0.1 --mysql-port 3306 --mysql-user root --mysql-password '***' --mysql-database tutoring_crawler --list-url "https://example.com/list"`
+- 每日调度：在上面基础上追加
+  `--schedule-daily --daily-run-at 08:00 --poll-seconds 30`
+- 运行全部 crawler 单测：`python3 -m unittest discover crawler/tests`
+- 运行单个测试文件：`python3 -m unittest crawler.tests.test_scheduler`
+- 运行单个测试方法（示例）：
+  `python3 -m unittest crawler.tests.test_scheduler.DailyScanSchedulerTest.test_should_trigger_once_per_day`
 
-- There is no dedicated linter/formatter plugin configured (no Checkstyle/Spotless/PMD in POMs).
-- Use compilation + tests as quality gates:
-  - `mvn clean verify`
-- If you add a formatter or lint tool, document commands here and in the parent `pom.xml`.
+## 3) Lint / 格式化 / 质量门禁
 
-### Run app
+- Java 当前未启用 Checkstyle/Spotless/PMD；以 `mvn clean verify` 作为质量门禁。
+- 前端当前未配置 ESLint/Prettier；变更后至少执行 `npm run build` 确认可构建。
+- Python 当前未配置 ruff/flake8；变更后至少执行受影响测试。
 
-- Run Spring Boot app from root:
-- Run Spring Boot app from root:
-  - `mvn -pl java/bootstrap -am spring-boot:run`
-- Default port is `8081` (see `java/bootstrap/src/main/resources/application.properties`).
+## 4) Java 代码风格（强制）
 
-## 3) Known current behavior
+### 4.1 格式与注释
 
-- `HeartbeatController` is mapped at `/health/heartbeat` via class + method mappings.
-- Existing test `heartbeat_shouldReturnResultWrapper` currently calls `/heartbeat` and fails with 404.
-- Do not silently “fix around” this mismatch; align test and API intentionally in the same change.
+- 4 空格缩进，UTF-8 编码，文件末尾保留换行。
+- 一个文件只放一个顶层 `public class`。
+- 新增类必须包含类级 Javadoc：
+  - `功能：...`
+  - `@author linyi`
+  - `@since YYYY-MM-DD`
+- 非直观逻辑需加简洁注释（边界条件、业务分支、降级策略）。
 
-## 4) Code style and conventions
+### 4.2 Imports
 
-Follow existing Spring Boot + Java 17 conventions in this repo.
+- 禁止通配符导入；优先显式导入。
+- 分组顺序：
+  1) `java.*` / `javax.*` / `jakarta.*`
+  2) 第三方库（`org.*`、`lombok.*` 等）
+  3) 项目内（`com.lin.*`）
+- 分组间保留一个空行，删除未使用导入。
 
-### General formatting
+### 4.3 类型与命名
 
-- Use 4-space indentation, no tabs.
-- Keep one top-level public class per file.
-- Keep files UTF-8.
-- Use trailing newline at end of file.
-- Keep methods focused and short; extract helper methods before adding complex branching.
+- 禁止原始类型（raw type）和无意义 `Object` 透传。
+- 泛型边界明确，例如 `Result<TutoringInfoVO>`。
+- Mapper 层对象命名使用 `DO`；领域层对象命名使用 `Model`。
+- 非框架强约束场景，不使用 `Entity` 作为业务对象命名。
+- 常量使用 `UPPER_SNAKE_CASE`，方法/字段使用 `camelCase`。
 
-### Required comments and spacing
+### 4.4 Spring 约定
 
-- Generated code must include comments; do not leave key logic completely uncommented.
-- Every new class must have a class-level Javadoc block (about 5-6 lines), using this template:
-  - `/**`
-  - ` * 功能：<一句话描述该类职责>`
-  - ` *`
-  - ` * @author linyi`
-  - ` * @since <YYYY-MM-DD，当天日期>`
-  - ` */`
-- Add concise comments for non-obvious or critical logic inside methods (validation branches, business rules, boundary handling, external calls).
-- Keep comments accurate and maintainable; update comments together with logic changes.
-- Leave one blank line between field/property declarations in classes for readability.
-- 数据对象（DO/Model/DTO/VO）中的每个属性都必须有注释（推荐字段级 Javadoc），说明字段含义、单位或取值约束。
+- 依赖注入统一使用 `@Resource`。
+- 非特殊场景不使用构造器注入或 `@Autowired`。
+- Controller 返回保持项目既有包装（如 `Result<T>`）。
 
-### SQL DDL 约定
+### 4.5 SQL DDL 约定
 
-- 新增或修改 `schema.sql` 中的业务字段时，默认使用 `NOT NULL` 约束。
-- 新增或修改 `schema.sql` 中的业务字段时，必须提供 `DEFAULT` 默认值，避免空值语义不清。
-- 每张表和每个字段都需要补充备注，优先在 `CREATE TABLE` 内联 `COMMENT`。
-- 默认值应与业务语义一致（字符串通常为 `''`，时间通常为 `CURRENT_TIMESTAMP`，数值按领域约定）。
+- 新增业务字段默认 `NOT NULL`。
+- 新增业务字段必须提供 `DEFAULT`。
+- 每张表、每个字段都必须有 `COMMENT`。
 
-### Imports
+### 4.6 异常与日志
 
-- Prefer explicit imports; avoid wildcard imports.
-- Group order:
-  1. `java.*` / `javax.*`
-  2. third-party (`org.*`, `lombok.*`, etc.)
-  3. project (`com.lin.*`)
-- Separate groups with a blank line.
-- Remove unused imports.
-- Use static imports only when they materially improve readability (common in tests).
+- 不吞异常；优先抛出带业务语义的错误信息。
+- 可恢复错误返回结构化失败（例如 `Result.fail(...)`）。
+- 使用 `@Slf4j` 输出结构化日志，严禁打印密钥/密码/令牌。
 
-### Types and models
+## 5) 前端与 Python 风格补充
 
-- Prefer concrete, domain-relevant types over `Object` or raw types.
-- Keep generics explicit at boundaries (e.g., `Result<HeartbeatData>`).
-- This project currently prefers regular classes with Lombok over Java records for response wrappers.
-- Use `final` for fields that should not change after construction.
-- Mapper 层返回对象统一命名为 `DO`；领域层返回对象统一命名为 `Model`。
-- 除框架强约束场景外，不使用 `Entity` 作为业务对象命名。
+- Vue/JS 遵循现有代码风格：2 空格缩进、组合式 API、语义化 class 命名。
+- 样式以现有 CSS 变量体系为主，避免无约束“魔法值”散落。
+- Python 按 PEP 8：4 空格缩进，尽量补充类型标注，函数保持单一职责。
 
-### Spring 注入约定
+## 6) 测试要求
 
-- Spring 组件依赖注入统一使用 `@Resource`。
-- 非特殊场景下不使用构造器注入或 `@Autowired`，保持注入风格一致。
+- 修复缺陷时，必须先补/改测试并确保“先失败后通过”。
+- 后端接口改动需覆盖 HTTP 层与 JSON 契约（建议 `MockMvc`）。
+- crawler 解析逻辑改动需覆盖边界样例（多条拆分、空字段、噪声清理）。
+- 若无法在本地跑全量测试，至少运行受影响模块/文件并在说明中标注范围。
 
-### Naming
+## 7) 依赖与模块边界
 
-- Packages: lowercase dot-separated (`com.lin.webtemplate...`).
-- Classes: PascalCase (`HeartbeatController`).
-- Methods/fields: camelCase (`heartbeat_shouldReturnResultWrapper` only for test names).
-- Constants: UPPER_SNAKE_CASE.
-- Test method names: behavior-focused; `should` style is acceptable and already used.
+- 依赖添加在“最窄模块”，不要把业务依赖随意上提到父 POM。
+- 保持既有模块依赖方向，不要在 `facade` 引入 `service`。
+- Maven 本地仓库必须走全局配置（`~/.m2/repository` 或 `settings.xml`）。
+- 禁止在 `.mvn/maven.config` 设置 `maven.repo.local`。
 
-### Spring and API patterns
+## 8) Agent 工作流建议
 
-- Use `@RestController` for JSON endpoints.
-- Keep request mappings explicit and stable; avoid ambiguous overlapping paths.
-- Prefer returning typed wrappers used by the project (`Result<T>`) when touching existing endpoints.
-- If HTTP status remains 200 for domain-level failure, encode machine-readable error code/message in body consistently.
-- Keep actuator and business endpoints separated by clear base paths.
+- 改代码前先读：目标模块 POM、相关实现、对应测试。
+- 优先做最小闭环修改，避免顺手大重构。
+- 提交前顺序：受影响单测 → 模块测试 → 必要时全量 `verify`。
+- 若行为与测试冲突，不要“绕过”；应同步修正实现与测试并说明原因。
 
-### Error handling
+## 9) Cursor / Copilot 规则同步
 
-- Do not swallow exceptions.
-- Prefer explicit, meaningful error messages with stable codes.
-- For recoverable/domain failures, return structured `Result.fail(code, message, data)`.
-- For unexpected failures, use centralized exception handling (`@ControllerAdvice`) if introducing cross-cutting behavior.
-- Avoid leaking secrets/internal details in error messages.
-
-### Logging
-
-- Use `@Slf4j` and structured, concise log messages.
-- Log lifecycle milestones at `info` level.
-- Log actionable diagnostics at `warn`/`error` with context.
-- Do not log sensitive configuration or credentials.
-
-### Testing expectations
-
-- Use JUnit 5 + Spring Boot Test (`spring-boot-starter-test`).
-- For web endpoints, prefer `MockMvc` tests as in existing tests.
-- Assert both HTTP layer and JSON payload contract.
-- Disable environment-fragile health indicators in tests when needed (example: disk space health check).
-- When fixing a bug, add/adjust a test that fails before and passes after.
-
-## 5) Dependency and module rules
-
-- Keep module boundaries clean:
-- Keep module boundaries clean:
-  - `java/bootstrap` depends on `java/service`.
-  - `java/service` depends on `java/infrastructure`.
-  - `java/infrastructure` depends on `java/facade`.
-- Add dependencies in the narrowest module possible.
-- Prefer managing versions in parent POM `dependencyManagement`.
-- Keep Lombok usage consistent with existing code; do not mix many competing boilerplate patterns in same package.
-
-## 6) Agent workflow guidance
-
-- Before edits, inspect affected module POM and nearby classes/tests.
-- After edits, run targeted tests first, then broader verification if feasible.
-- Keep diffs small and intention-revealing.
-- If behavior and tests disagree, update both coherently and explain rationale.
-- `.mvn/maven.config` 不得设置 `maven.repo.local`；若发现该配置需移除并改用全局仓库。
-
-## 7) Cursor/Copilot rules check
-
-- Checked for Cursor rules:
-  - `.cursorrules`
-  - `.cursor/rules/`
-- Checked for Copilot instructions:
-  - `.github/copilot-instructions.md`
-- Result: none of these files/directories exist in this repository right now.
-- If added later, mirror their key constraints into this document.
+- 已检查 `.cursorrules`：不存在。
+- 已检查 `.cursor/rules/`：不存在。
+- 已检查 `.github/copilot-instructions.md`：不存在。
+- 若后续新增上述规则文件，需将关键约束同步并优先遵循。

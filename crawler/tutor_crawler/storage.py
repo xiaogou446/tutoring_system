@@ -1,6 +1,8 @@
 import sqlite3
 from contextlib import closing
 
+from tutor_crawler.html_archive import store_html
+
 
 class CrawlStorage:
     def __init__(self, db_path: str):
@@ -18,6 +20,7 @@ class CrawlStorage:
                 CREATE TABLE IF NOT EXISTS article_raw (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     source_url TEXT NOT NULL UNIQUE,
+                    platform_code TEXT NOT NULL DEFAULT 'MIAOMIAO_WECHAT',
                     title TEXT NOT NULL DEFAULT '',
                     content_html TEXT NOT NULL DEFAULT '',
                     content_text TEXT NOT NULL DEFAULT '',
@@ -29,11 +32,13 @@ class CrawlStorage:
 
                 CREATE TABLE IF NOT EXISTS crawl_task (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    source_url TEXT NOT NULL UNIQUE,
+                    source_url TEXT NOT NULL,
+                    platform_code TEXT NOT NULL DEFAULT 'MIAOMIAO_WECHAT',
                     source_type TEXT NOT NULL DEFAULT '',
                     status TEXT NOT NULL DEFAULT 'PENDING',
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(source_url, platform_code)
                 );
 
                 CREATE TABLE IF NOT EXISTS crawl_task_log (
@@ -70,8 +75,44 @@ class CrawlStorage:
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
+
+                CREATE TABLE IF NOT EXISTS crawl_platform (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    platform_code TEXT NOT NULL UNIQUE,
+                    platform_name TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'ENABLED',
+                    description TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS admin_user (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'ENABLED',
+                    last_login_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
                 """
             )
+
+            columns = conn.execute("PRAGMA table_info(article_raw)").fetchall()
+            column_names = {row["name"] for row in columns}
+            if "platform_code" not in column_names:
+                conn.execute(
+                    "ALTER TABLE article_raw ADD COLUMN platform_code TEXT NOT NULL DEFAULT 'MIAOMIAO_WECHAT'"
+                )
+
+            columns = conn.execute("PRAGMA table_info(crawl_task)").fetchall()
+            column_names = {row["name"] for row in columns}
+            if "platform_code" not in column_names:
+                conn.execute(
+                    "ALTER TABLE crawl_task ADD COLUMN platform_code TEXT NOT NULL DEFAULT 'MIAOMIAO_WECHAT'"
+                )
+
+            self._migrate_crawl_task_unique_constraint(conn)
 
             columns = conn.execute("PRAGMA table_info(tutoring_info)").fetchall()
             column_names = {row["name"] for row in columns}
@@ -79,26 +120,101 @@ class CrawlStorage:
                 conn.execute(
                     "ALTER TABLE tutoring_info ADD COLUMN content_block TEXT NOT NULL DEFAULT ''"
                 )
+
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_article_raw_platform_code ON article_raw(platform_code)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_crawl_task_platform_code ON crawl_task(platform_code)"
+            )
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_crawl_task_source_platform ON crawl_task(source_url, platform_code)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_crawl_platform_status ON crawl_platform(status)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_admin_user_status ON admin_user(status)"
+            )
+
+            conn.execute(
+                """
+                INSERT INTO crawl_platform(platform_code, platform_name, status, description)
+                SELECT 'MIAOMIAO_WECHAT', '淼淼家教公众号', 'ENABLED', '默认平台'
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM crawl_platform WHERE platform_code='MIAOMIAO_WECHAT'
+                )
+                """
+            )
             conn.commit()
 
-    def create_task(self, source_url: str, source_type: str) -> int:
+    @staticmethod
+    def _migrate_crawl_task_unique_constraint(conn: sqlite3.Connection) -> None:
+        indexes = conn.execute("PRAGMA index_list(crawl_task)").fetchall()
+        for index in indexes:
+            if int(index["unique"]) != 1:
+                continue
+            index_name = index["name"]
+            columns = conn.execute(f"PRAGMA index_info({index_name!r})").fetchall()
+            column_names = [column["name"] for column in columns]
+            if column_names == ["source_url", "platform_code"]:
+                return
+
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("DROP TABLE IF EXISTS crawl_task_new")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS crawl_task_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_url TEXT NOT NULL,
+                platform_code TEXT NOT NULL DEFAULT 'MIAOMIAO_WECHAT',
+                source_type TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'PENDING',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(source_url, platform_code)
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO crawl_task_new(id, source_url, platform_code, source_type, status, created_at, updated_at)
+            SELECT id, source_url, IFNULL(NULLIF(platform_code, ''), 'MIAOMIAO_WECHAT'), source_type, status, created_at, updated_at
+              FROM crawl_task
+            """
+        )
+        conn.execute("DROP TABLE crawl_task")
+        conn.execute("ALTER TABLE crawl_task_new RENAME TO crawl_task")
+        conn.execute("PRAGMA foreign_keys = ON")
+
+    def create_task(
+        self,
+        source_url: str,
+        source_type: str,
+        platform_code: str = "MIAOMIAO_WECHAT",
+    ) -> int:
         with closing(self._conn()) as conn:
             conn.execute(
                 """
-                INSERT INTO crawl_task(source_url, source_type, status)
-                VALUES (?, ?, 'PENDING')
+                INSERT INTO crawl_task(source_url, platform_code, source_type, status)
+                VALUES (?, ?, ?, 'PENDING')
                 """,
-                (source_url, source_type),
+                (source_url, platform_code, source_type),
             )
             conn.commit()
             return int(
                 conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
             )
 
-    def get_task_by_url(self, source_url: str) -> sqlite3.Row | None:
+    def get_task_by_url(
+        self,
+        source_url: str,
+        platform_code: str = "MIAOMIAO_WECHAT",
+    ) -> sqlite3.Row | None:
         with closing(self._conn()) as conn:
             return conn.execute(
-                "SELECT * FROM crawl_task WHERE source_url=?", (source_url,)
+                "SELECT * FROM crawl_task WHERE source_url=? AND platform_code=?",
+                (source_url, platform_code),
             ).fetchone()
 
     def get_task(self, task_id: int) -> sqlite3.Row | None:
@@ -146,17 +262,19 @@ class CrawlStorage:
             return list(rows)
 
     def save_article(self, article: dict) -> None:
+        html_path = store_html(article["source_url"], article["content_html"])
         with closing(self._conn()) as conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO article_raw(
-                    source_url, title, content_html, content_text, published_at, crawled_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    source_url, platform_code, title, content_html, content_text, published_at, crawled_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """,
                 (
                     article["source_url"],
+                    article.get("platform_code", "MIAOMIAO_WECHAT"),
                     article["title"],
-                    article["content_html"],
+                    html_path,
                     article["content_text"],
                     article["published_at"],
                 ),

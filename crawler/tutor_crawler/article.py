@@ -3,6 +3,8 @@ from datetime import datetime
 from html import unescape
 from html.parser import HTMLParser
 
+from tutor_crawler.parser import TutoringInfoParser
+
 
 ITEM_BREAK_MARKER = "<<<ITEM_BREAK>>>"
 
@@ -79,6 +81,14 @@ def _extract_published_at(html: str) -> str:
 
 
 def _extract_main_text(html: str) -> str:
+    # 与结构化解析保持同源分块策略，避免 article_raw 的 marker 与解析期分块不一致。
+    parser_blocks = TutoringInfoParser._split_candidate_blocks_from_html(html)
+    if len(parser_blocks) >= 2:
+        joined = f"{ITEM_BREAK_MARKER}\n" + f"\n{ITEM_BREAK_MARKER}\n".join(
+            _clean_text(block) for block in parser_blocks
+        )
+        return _inject_item_breaks(_clean_text(joined))
+
     wechat_blocks = _extract_top_blocks_by_element_id(html, "js_content")
     if len(wechat_blocks) >= 2:
         joined = f"{ITEM_BREAK_MARKER}\n" + f"\n{ITEM_BREAK_MARKER}\n".join(

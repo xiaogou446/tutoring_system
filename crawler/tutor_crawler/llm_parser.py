@@ -59,17 +59,111 @@ class LlmTutoringInfoParser:
         if not self.llm_client.is_configured():
             return self.fallback_parser.parse_many(article)
 
+        prepared_text = ""
         try:
             prepared_text = self._prepare_content_text(article)
             raw_items = self._call_llm(article, prepared_text)
             parsed = self._normalize_items(article, raw_items, prepared_text)
-            if parsed:
+            if parsed and self._is_aligned_with_blocks(parsed, prepared_text):
                 return parsed
         except Exception:
             if not self.enable_fallback:
                 raise
 
+        # LLM 对齐失败时，优先基于 refined blocks 做规则兜底，避免回退到粗粒度分块。
+        fallback_refined = self._fallback_parse_with_prepared_blocks(
+            article, prepared_text
+        )
+        if fallback_refined:
+            return fallback_refined
+
         return self.fallback_parser.parse_many(article)
+
+    def _fallback_parse_with_prepared_blocks(
+        self, article: dict, prepared_text: str
+    ) -> list[dict]:
+        marker = "<<<ITEM_BREAK>>>"
+        if marker not in prepared_text:
+            return []
+
+        blocks = [
+            block.strip() for block in prepared_text.split(marker) if block.strip()
+        ]
+        if len(blocks) < 2:
+            return []
+
+        source_url = article.get("source_url", "")
+        published_at = article.get("published_at", "")
+        parsed_items: list[dict] = []
+
+        for index, block in enumerate(blocks, start=1):
+            block_article = {
+                "source_url": source_url,
+                "published_at": published_at,
+                "content_text": block,
+                "content_html": "",
+            }
+            item = self.fallback_parser.parse(block_article)
+            if not isinstance(item, dict):
+                continue
+            row = dict(item)
+            row["source_url"] = (
+                source_url if index == 1 else f"{source_url}#item-{index}"
+            )
+            row["published_at"] = published_at
+            row["content_block"] = block
+            if self._is_meaningful_item(row):
+                parsed_items.append(row)
+
+        return parsed_items
+
+    @staticmethod
+    def _is_meaningful_item(item: dict) -> bool:
+        fields = [
+            "city",
+            "district",
+            "grade",
+            "subject",
+            "address",
+            "time_schedule",
+            "salary_text",
+            "teacher_requirement",
+        ]
+        return any((item.get(field) or "").strip() for field in fields)
+
+    @staticmethod
+    def _is_aligned_with_blocks(items: list[dict], prepared_text: str) -> bool:
+        marker = "<<<ITEM_BREAK>>>"
+        if marker not in prepared_text:
+            return True
+        blocks = [
+            block.strip() for block in prepared_text.split(marker) if block.strip()
+        ]
+        if blocks and len(items) > len(blocks):
+            return False
+
+        snippet_fields = [
+            "city_snippet",
+            "district_snippet",
+            "grade_snippet",
+            "subject_snippet",
+            "address_snippet",
+            "time_schedule_snippet",
+            "salary_snippet",
+            "teacher_requirement_snippet",
+        ]
+        for item in items:
+            block = (item.get("content_block") or "").strip()
+            if not block:
+                return False
+            snippets = [
+                (item.get(field) or "").strip()
+                for field in snippet_fields
+                if (item.get(field) or "").strip()
+            ]
+            if snippets and not all(snippet in block for snippet in snippets):
+                return False
+        return True
 
     def _call_llm(self, article: dict, content_text: str) -> list[dict]:
         marker = "<<<ITEM_BREAK>>>"
@@ -104,7 +198,19 @@ class LlmTutoringInfoParser:
     def _prepare_content_text(self, article: dict) -> str:
         text = article.get("content_text", "")
         if "<<<ITEM_BREAK>>>" in text:
-            return text
+            raw_blocks = [
+                block.strip()
+                for block in text.split("<<<ITEM_BREAK>>>")
+                if block.strip()
+            ]
+            refined_blocks: list[str] = []
+            for block in raw_blocks:
+                split_blocks = self._split_by_repeated_address(block)
+                if len(split_blocks) > 1:
+                    refined_blocks.extend(split_blocks)
+                else:
+                    refined_blocks.append(block)
+            return "\n<<<ITEM_BREAK>>>\n".join(refined_blocks)
 
         blocks: list[str] = []
         if hasattr(self.fallback_parser, "_split_candidate_blocks"):
@@ -151,6 +257,32 @@ class LlmTutoringInfoParser:
             for block in blocks
             if sum(1 for item in block if hint_re.search(item)) >= 2
         ]
+
+    @staticmethod
+    def _split_by_repeated_address(text: str) -> list[str]:
+        lines = [line.strip() for line in text.split("\n") if line.strip()]
+        if not lines:
+            return []
+
+        address_re = re.compile(r"^(?:【)?(?:地址|地点)(?:】)?(?:\s*[:：])?")
+        blocks: list[list[str]] = []
+        current: list[str] = []
+        address_seen = 0
+        for line in lines:
+            is_address = bool(address_re.search(line))
+            if is_address and current and address_seen >= 1:
+                blocks.append(current)
+                current = [line]
+                address_seen = 1
+                continue
+            current.append(line)
+            if is_address:
+                address_seen += 1
+
+        if current:
+            blocks.append(current)
+
+        return ["\n".join(block) for block in blocks if block]
 
     @staticmethod
     def _safe_json_loads(content: str) -> dict:

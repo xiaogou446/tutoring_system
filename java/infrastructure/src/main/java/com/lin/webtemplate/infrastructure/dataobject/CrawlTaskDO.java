@@ -22,6 +22,9 @@ public class CrawlTaskDO {
     /** 采集目标URL。 */
     private String sourceUrl;
 
+    /** 平台编码。 */
+    private String platformCode;
+
     /** 来源类型。 */
     private String sourceType;
 
