@@ -1,3 +1,5 @@
 llm_config.json
 crawler/data/*
 logs/*
+AGENTS.md
+openspec/*
