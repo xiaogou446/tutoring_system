@@ -1,6 +1,0 @@
-{
-  "base_url": "https://right.codes/codex/v1",
-  "api_key": "sk-9f5fbb5c31564974a9823f4bd78222f6",
-  "model": "gpt-5.2",
-  "timeout_seconds": 120
-}
