@@ -75,9 +75,11 @@ CREATE INDEX IF NOT EXISTS ix_crawl_task_created_at ON crawl_task(created_at);
 CREATE TABLE IF NOT EXISTS crawl_task_log (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     task_id BIGINT NOT NULL DEFAULT 0 COMMENT '关联任务ID',
+    runtime VARCHAR(16) NOT NULL DEFAULT 'python' COMMENT '运行端(java/python)',
     stage VARCHAR(32) NOT NULL DEFAULT '' COMMENT '任务阶段',
     status VARCHAR(32) NOT NULL DEFAULT '' COMMENT '阶段状态',
     error_type VARCHAR(64) NOT NULL DEFAULT '' COMMENT '错误类型',
+    error_summary VARCHAR(256) NOT NULL DEFAULT '' COMMENT '失败摘要',
     error_message VARCHAR(512) NOT NULL DEFAULT '' COMMENT '错误信息',
     started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '阶段开始时间',
     finished_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '阶段结束时间',

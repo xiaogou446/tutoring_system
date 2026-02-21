@@ -1,6 +1,7 @@
 package com.lin.webtemplate.service.controller;
 
 import jakarta.annotation.Resource;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -31,9 +32,16 @@ public class TutoringInfoController {
 
     @GetMapping("/page")
     public Result<TutoringInfoPageModel> pageQuery(@ModelAttribute TutoringInfoPageQueryDTO queryDTO) {
-        log.info("TutoringInfoController pageQuery:{}", queryDTO);
+        log.info("TutoringInfoController.pageQuery start, pageNo={}, pageSize={}, sortOrder={}",
+                queryDTO == null ? null : queryDTO.getPageNo(),
+                queryDTO == null ? null : queryDTO.getPageSize(),
+                queryDTO == null ? null : queryDTO.getSortOrder());
         TutoringInfoPageModel tutoringInfoPageModel = tutoringInfoQueryService.pageQuery(queryDTO);
-        log.info("TutoringInfoController tutoringInfoPageModel:{}", tutoringInfoPageModel);
+        log.info("TutoringInfoController.pageQuery done, pageNo={}, pageSize={}, total={}, records={}",
+                tutoringInfoPageModel.getPageNo(),
+                tutoringInfoPageModel.getPageSize(),
+                tutoringInfoPageModel.getTotal(),
+                tutoringInfoPageModel.getRecords() == null ? 0 : tutoringInfoPageModel.getRecords().size());
         return Result.ok(tutoringInfoPageModel);
     }
 }

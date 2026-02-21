@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lin.webtemplate.infrastructure.mapper.CrawlPlatformMapper">
+
+    <resultMap id="CrawlPlatformResultMap" type="com.lin.webtemplate.infrastructure.dataobject.CrawlPlatformDO">
+        <id column="id" property="id"/>
+        <result column="platform_code" property="platformCode"/>
+        <result column="platform_name" property="platformName"/>
+        <result column="status" property="status"/>
+        <result column="description" property="description"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectByStatus" resultMap="CrawlPlatformResultMap">
+        SELECT id, platform_code, platform_name, status, description, created_at, updated_at
+          FROM crawl_platform
+         WHERE status = #{status}
+         ORDER BY id ASC
+    </select>
+
+    <select id="selectByPlatformCode" resultMap="CrawlPlatformResultMap">
+        SELECT id, platform_code, platform_name, status, description, created_at, updated_at
+          FROM crawl_platform
+         WHERE platform_code = #{platformCode}
+         LIMIT 1
+    </select>
+
+</mapper>

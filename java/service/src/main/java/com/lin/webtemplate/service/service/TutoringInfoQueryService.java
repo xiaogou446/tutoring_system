@@ -3,6 +3,7 @@ package com.lin.webtemplate.service.service;
 import java.util.List;
 
 import jakarta.annotation.Resource;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -35,6 +36,7 @@ public class TutoringInfoQueryService {
     private TutoringInfoRepository tutoringInfoRepository;
 
     public TutoringInfoPageModel pageQuery(TutoringInfoPageQueryDTO queryDTO) {
+        log.info("TutoringInfoQueryService.pageQuery start, queryDTO={}", queryDTO);
         int pageNo = normalizePageNo(queryDTO.getPageNo());
         int pageSize = normalizePageSize(queryDTO.getPageSize());
         int offset = (pageNo - 1) * pageSize;
@@ -62,6 +64,8 @@ public class TutoringInfoQueryService {
         pageModel.setPageSize(pageSize);
         pageModel.setTotal(total);
         pageModel.setRecords(itemModels);
+        log.info("TutoringInfoQueryService.pageQuery done, pageNo={}, pageSize={}, total={}, records={}",
+                pageNo, pageSize, total, itemModels.size());
         return pageModel;
     }
 

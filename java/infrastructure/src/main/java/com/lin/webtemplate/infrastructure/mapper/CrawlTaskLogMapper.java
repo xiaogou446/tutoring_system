@@ -1,5 +1,6 @@
 package com.lin.webtemplate.infrastructure.mapper;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.apache.ibatis.annotations.Mapper;
@@ -19,4 +20,9 @@ public interface CrawlTaskLogMapper {
     int insert(CrawlTaskLogDO taskLog);
 
     List<CrawlTaskLogDO> selectLatestByTaskIds(@Param("taskIds") List<Long> taskIds);
+
+    List<CrawlTaskLogDO> selectForRuntimeLog(@Param("keyword") String keyword,
+                                             @Param("startTime") LocalDateTime startTime,
+                                             @Param("endTime") LocalDateTime endTime,
+                                             @Param("limit") Integer limit);
 }

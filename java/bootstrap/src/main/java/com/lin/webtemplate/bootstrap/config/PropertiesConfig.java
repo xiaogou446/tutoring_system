@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Configuration;
 
 import com.lin.webtemplate.service.config.AdminAuthJwtProperties;
 import com.lin.webtemplate.service.config.AdminInitProperties;
+import com.lin.webtemplate.service.config.AdminRuntimeLogProperties;
 import com.lin.webtemplate.service.config.PythonCommandProperties;
 
 /**
@@ -15,6 +16,6 @@ import com.lin.webtemplate.service.config.PythonCommandProperties;
  */
 @Configuration
 @EnableConfigurationProperties({WechatIngestionProperties.class, PythonCommandProperties.class,
-        AdminAuthJwtProperties.class, AdminInitProperties.class})
+        AdminAuthJwtProperties.class, AdminInitProperties.class, AdminRuntimeLogProperties.class})
 public class PropertiesConfig {
 }

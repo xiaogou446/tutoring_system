@@ -1,5 +1,6 @@
 package com.lin.webtemplate.infrastructure.repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import jakarta.annotation.Resource;
@@ -26,6 +27,13 @@ public class CrawlTaskLogRepository {
 
     public List<CrawlTaskLogDO> findLatestByTaskIds(List<Long> taskIds) {
         return crawlTaskLogMapper.selectLatestByTaskIds(taskIds);
+    }
+
+    public List<CrawlTaskLogDO> findForRuntimeLog(String keyword,
+                                                  LocalDateTime startTime,
+                                                  LocalDateTime endTime,
+                                                  Integer limit) {
+        return crawlTaskLogMapper.selectForRuntimeLog(keyword, startTime, endTime, limit);
     }
 
 }

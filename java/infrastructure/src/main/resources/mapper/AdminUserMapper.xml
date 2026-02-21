@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lin.webtemplate.infrastructure.mapper.AdminUserMapper">
+
+    <resultMap id="AdminUserResultMap" type="com.lin.webtemplate.infrastructure.dataobject.AdminUserDO">
+        <id column="id" property="id"/>
+        <result column="username" property="username"/>
+        <result column="password_hash" property="passwordHash"/>
+        <result column="status" property="status"/>
+        <result column="last_login_at" property="lastLoginAt"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectByUsername" resultMap="AdminUserResultMap">
+        SELECT id, username, password_hash, status, last_login_at, created_at, updated_at
+          FROM admin_user
+         WHERE username = #{username}
+         LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.lin.webtemplate.infrastructure.dataobject.AdminUserDO"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO admin_user(username, password_hash, status, last_login_at, created_at, updated_at)
+        VALUES (#{username}, #{passwordHash}, #{status}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    </insert>
+
+    <update id="updateLastLoginAt">
+        UPDATE admin_user
+           SET last_login_at = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
+         WHERE id = #{id}
+    </update>
+
+    <update id="updateCredentialsAndStatus">
+        UPDATE admin_user
+           SET password_hash = #{passwordHash},
+               status = #{status},
+               updated_at = CURRENT_TIMESTAMP
+         WHERE id = #{id}
+    </update>
+
+</mapper>

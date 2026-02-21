@@ -7,10 +7,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 功能：验证 H5 家教信息分页查询接口的筛选与排序行为。
@@ -23,6 +27,8 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @SpringBootTest(classes = WebTemplateApplication.class)
 @AutoConfigureMockMvc
+@ExtendWith(OutputCaptureExtension.class)
+@Transactional
 class TutoringInfoQueryControllerTest {
 
     @Resource
@@ -120,5 +126,20 @@ class TutoringInfoQueryControllerTest {
                 .andExpect(jsonPath("$.data.total").value(3))
                 .andExpect(jsonPath("$.data.records[0].sourceUrl").value("https://mp.weixin.qq.com/s/mock-c#item-1"))
                 .andExpect(jsonPath("$.data.records[1].sourceUrl").value("https://mp.weixin.qq.com/s/mock-a#item-1"));
+    }
+
+    @Test
+    void pageQuery_shouldWriteControllerAndServiceLog(CapturedOutput output) throws Exception {
+        mockMvc.perform(
+                        get("/h5/tutoring-info/page")
+                                .param("pageNo", "1")
+                                .param("pageSize", "10")
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        String content = output.getOut();
+        org.junit.jupiter.api.Assertions.assertTrue(content.contains("TutoringInfoController.pageQuery start"));
+        org.junit.jupiter.api.Assertions.assertTrue(content.contains("TutoringInfoQueryService.pageQuery done"));
     }
 }

@@ -44,9 +44,11 @@ class CrawlStorage:
                 CREATE TABLE IF NOT EXISTS crawl_task_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     task_id INTEGER NOT NULL,
+                    runtime TEXT NOT NULL DEFAULT 'python',
                     stage TEXT NOT NULL DEFAULT '',
                     status TEXT NOT NULL DEFAULT '',
                     error_type TEXT NOT NULL DEFAULT '',
+                    error_summary TEXT NOT NULL DEFAULT '',
                     error_message TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
@@ -113,6 +115,17 @@ class CrawlStorage:
                 )
 
             self._migrate_crawl_task_unique_constraint(conn)
+
+            columns = conn.execute("PRAGMA table_info(crawl_task_log)").fetchall()
+            column_names = {row["name"] for row in columns}
+            if "runtime" not in column_names:
+                conn.execute(
+                    "ALTER TABLE crawl_task_log ADD COLUMN runtime TEXT NOT NULL DEFAULT 'python'"
+                )
+            if "error_summary" not in column_names:
+                conn.execute(
+                    "ALTER TABLE crawl_task_log ADD COLUMN error_summary TEXT NOT NULL DEFAULT ''"
+                )
 
             columns = conn.execute("PRAGMA table_info(tutoring_info)").fetchall()
             column_names = {row["name"] for row in columns}
@@ -241,15 +254,25 @@ class CrawlStorage:
         stage: str,
         status: str,
         error_type: str = "",
+        error_summary: str = "",
         error_message: str = "",
+        runtime: str = "python",
     ) -> None:
         with closing(self._conn()) as conn:
             conn.execute(
                 """
-                INSERT INTO crawl_task_log(task_id, stage, status, error_type, error_message)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO crawl_task_log(task_id, runtime, stage, status, error_type, error_summary, error_message)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (task_id, stage, status, error_type, error_message),
+                (
+                    task_id,
+                    runtime,
+                    stage,
+                    status,
+                    error_type,
+                    error_summary,
+                    error_message,
+                ),
             )
             conn.commit()
 

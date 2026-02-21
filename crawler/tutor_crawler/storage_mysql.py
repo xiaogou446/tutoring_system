@@ -58,9 +58,11 @@ class MySQLCrawlStorage:
             CREATE TABLE IF NOT EXISTS crawl_task_log (
                 id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
                 task_id BIGINT NOT NULL COMMENT '关联任务ID',
+                runtime VARCHAR(16) NOT NULL DEFAULT 'python' COMMENT '运行端(java/python)',
                 stage VARCHAR(64) NOT NULL DEFAULT '' COMMENT '执行阶段(FETCH/PARSE/RETRY_x)',
                 status VARCHAR(32) NOT NULL DEFAULT '' COMMENT '阶段状态(RUNNING/SUCCESS/FAILED)',
                 error_type VARCHAR(64) NOT NULL DEFAULT '' COMMENT '错误类型编码',
+                error_summary VARCHAR(256) NOT NULL DEFAULT '' COMMENT '失败摘要',
                 error_message VARCHAR(512) NOT NULL DEFAULT '' COMMENT '错误详情',
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
                 KEY idx_task_id (task_id),
@@ -122,6 +124,47 @@ class MySQLCrawlStorage:
             with conn.cursor() as cursor:
                 for sql in statements:
                     cursor.execute(sql)
+
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) AS c
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA=%s AND TABLE_NAME='crawl_task_log' AND COLUMN_NAME='runtime'
+                    """,
+                    (self.database,),
+                )
+                log_runtime_column = cursor.fetchone()
+                if int(log_runtime_column["c"] if log_runtime_column else 0) == 0:
+                    cursor.execute(
+                        """
+                        ALTER TABLE crawl_task_log
+                        ADD COLUMN runtime VARCHAR(16) NOT NULL DEFAULT 'python' COMMENT '运行端(java/python)'
+                        AFTER task_id
+                        """
+                    )
+
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) AS c
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA=%s AND TABLE_NAME='crawl_task_log' AND COLUMN_NAME='error_summary'
+                    """,
+                    (self.database,),
+                )
+                log_error_summary_column = cursor.fetchone()
+                if (
+                    int(
+                        log_error_summary_column["c"] if log_error_summary_column else 0
+                    )
+                    == 0
+                ):
+                    cursor.execute(
+                        """
+                        ALTER TABLE crawl_task_log
+                        ADD COLUMN error_summary VARCHAR(256) NOT NULL DEFAULT '' COMMENT '失败摘要'
+                        AFTER error_type
+                        """
+                    )
 
                 cursor.execute(
                     """
@@ -298,16 +341,26 @@ class MySQLCrawlStorage:
         stage: str,
         status: str,
         error_type: str = "",
+        error_summary: str = "",
         error_message: str = "",
+        runtime: str = "python",
     ) -> None:
         with closing(self._conn()) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
-                    INSERT INTO crawl_task_log(task_id, stage, status, error_type, error_message)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO crawl_task_log(task_id, runtime, stage, status, error_type, error_summary, error_message)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
-                    (task_id, stage, status, error_type, error_message),
+                    (
+                        task_id,
+                        runtime,
+                        stage,
+                        status,
+                        error_type,
+                        error_summary,
+                        error_message,
+                    ),
                 )
             conn.commit()
 

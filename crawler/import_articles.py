@@ -101,8 +101,8 @@ def _process_from_article_raw(service: CrawlService, task_id: int) -> bool:
                 task_id,
                 "PARSE",
                 "FAILED",
-                "UNSUPPORTED_PLATFORM",
-                f"unsupported platform_code: {platform_code}",
+                error_type="UNSUPPORTED_PLATFORM",
+                error_message=f"unsupported platform_code: {platform_code}",
             )
             service.storage.update_task_status(task_id, "FAILED")
             return False
@@ -113,14 +113,17 @@ def _process_from_article_raw(service: CrawlService, task_id: int) -> bool:
                 task_id,
                 "FETCH",
                 "FAILED",
-                "ARTICLE_NOT_FOUND",
-                "article_raw not found",
+                error_type="ARTICLE_NOT_FOUND",
+                error_message="article_raw not found",
             )
             service.storage.update_task_status(task_id, "FAILED")
             return False
 
         service.storage.add_task_log(
-            task_id, "FETCH", "SUCCESS", "", "from article_raw"
+            task_id,
+            "FETCH",
+            "SUCCESS",
+            error_message="from article_raw",
         )
 
         article_platform_code = platform_code
@@ -140,8 +143,8 @@ def _process_from_article_raw(service: CrawlService, task_id: int) -> bool:
                 task_id,
                 "PARSE",
                 "FAILED",
-                "EMPTY_PARSED_RESULT",
-                "no meaningful parsed fields",
+                error_type="EMPTY_PARSED_RESULT",
+                error_message="no meaningful parsed fields",
             )
             service.storage.update_task_status(task_id, "FAILED")
             return False
@@ -155,7 +158,11 @@ def _process_from_article_raw(service: CrawlService, task_id: int) -> bool:
         return True
     except Exception as ex:  # noqa: BLE001
         service.storage.add_task_log(
-            task_id, "EXECUTE", "FAILED", "RUNTIME_ERROR", str(ex)
+            task_id,
+            "EXECUTE",
+            "FAILED",
+            error_type="RUNTIME_ERROR",
+            error_message=str(ex),
         )
         service.storage.update_task_status(task_id, "FAILED")
         return False

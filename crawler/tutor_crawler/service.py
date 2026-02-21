@@ -79,8 +79,8 @@ class CrawlService:
                 task_id,
                 "PARSE",
                 "FAILED",
-                "UNSUPPORTED_PLATFORM",
-                f"unsupported platform_code: {platform_code}",
+                error_type="UNSUPPORTED_PLATFORM",
+                error_message=f"unsupported platform_code: {platform_code}",
             )
             self.storage.update_task_status(task_id, "FAILED")
             return False
@@ -111,8 +111,8 @@ class CrawlService:
                     task_id,
                     "PARSE",
                     "FAILED",
-                    "EMPTY_PARSED_RESULT",
-                    "no meaningful parsed fields",
+                    error_type="EMPTY_PARSED_RESULT",
+                    error_message="no meaningful parsed fields",
                 )
                 self.storage.update_task_status(task_id, "FAILED")
                 return False
@@ -127,7 +127,11 @@ class CrawlService:
             return True
         except Exception as ex:  # noqa: BLE001
             self.storage.add_task_log(
-                task_id, "EXECUTE", "FAILED", "RUNTIME_ERROR", str(ex)
+                task_id,
+                "EXECUTE",
+                "FAILED",
+                error_type="RUNTIME_ERROR",
+                error_message=str(ex),
             )
             self.storage.update_task_status(task_id, "FAILED")
             return False
@@ -160,7 +164,11 @@ class CrawlService:
                 self.storage.add_task_log(task_id, f"RETRY_{attempt}", "SUCCESS")
                 return True
             self.storage.add_task_log(
-                task_id, f"RETRY_{attempt}", "FAILED", "RETRY_FAILED", "retry failed"
+                task_id,
+                f"RETRY_{attempt}",
+                "FAILED",
+                error_type="RETRY_FAILED",
+                error_message="retry failed",
             )
 
         return False

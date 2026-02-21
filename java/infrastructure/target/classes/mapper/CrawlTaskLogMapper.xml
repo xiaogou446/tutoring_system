@@ -5,25 +5,29 @@
     <resultMap id="CrawlTaskLogResultMap" type="com.lin.webtemplate.infrastructure.dataobject.CrawlTaskLogDO">
         <id column="id" property="id"/>
         <result column="task_id" property="taskId"/>
+        <result column="runtime" property="runtime"/>
         <result column="stage" property="stage"/>
         <result column="status" property="status"/>
         <result column="error_type" property="errorType"/>
+        <result column="error_summary" property="errorSummary"/>
         <result column="error_message" property="errorMessage"/>
         <result column="created_at" property="createdAt"/>
     </resultMap>
 
     <insert id="insert" parameterType="com.lin.webtemplate.infrastructure.dataobject.CrawlTaskLogDO"
             useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO crawl_task_log(task_id, stage, status, error_type, error_message, created_at)
-        VALUES (#{taskId}, #{stage}, #{status}, #{errorType}, #{errorMessage}, CURRENT_TIMESTAMP)
+        INSERT INTO crawl_task_log(task_id, runtime, stage, status, error_type, error_summary, error_message, created_at)
+        VALUES (#{taskId}, #{runtime}, #{stage}, #{status}, #{errorType}, #{errorSummary}, #{errorMessage}, CURRENT_TIMESTAMP)
     </insert>
 
     <select id="selectLatestByTaskIds" resultMap="CrawlTaskLogResultMap">
         SELECT l.id,
                l.task_id,
+               l.runtime,
                l.stage,
                l.status,
                l.error_type,
+               l.error_summary,
                l.error_message,
                l.created_at
           FROM crawl_task_log l
@@ -39,6 +43,38 @@
           ) latest
             ON l.task_id = latest.task_id
            AND l.id = latest.max_id
+    </select>
+
+    <select id="selectForRuntimeLog" resultMap="CrawlTaskLogResultMap">
+        SELECT id,
+               task_id,
+               runtime,
+               stage,
+               status,
+               error_type,
+               error_summary,
+               error_message,
+               created_at
+          FROM crawl_task_log
+        <where>
+            <if test="startTime != null">
+                AND created_at <![CDATA[>=]]> #{startTime}
+            </if>
+            <if test="endTime != null">
+                AND created_at <![CDATA[<=]]> #{endTime}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    stage LIKE CONCAT('%', #{keyword}, '%')
+                    OR status LIKE CONCAT('%', #{keyword}, '%')
+                    OR error_type LIKE CONCAT('%', #{keyword}, '%')
+                    OR error_summary LIKE CONCAT('%', #{keyword}, '%')
+                    OR error_message LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+        </where>
+         ORDER BY created_at DESC, id DESC
+         LIMIT #{limit}
     </select>
 
 </mapper>

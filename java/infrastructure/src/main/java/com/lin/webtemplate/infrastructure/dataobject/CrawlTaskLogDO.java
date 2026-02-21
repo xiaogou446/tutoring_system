@@ -22,6 +22,9 @@ public class CrawlTaskLogDO {
     /** 关联任务ID。 */
     private Long taskId;
 
+    /** 运行端（java/python）。 */
+    private String runtime;
+
     /** 任务阶段。 */
     private String stage;
 
@@ -30,6 +33,9 @@ public class CrawlTaskLogDO {
 
     /** 错误类型。 */
     private String errorType;
+
+    /** 错误摘要（如退出码、超时等简述）。 */
+    private String errorSummary;
 
     /** 错误信息。 */
     private String errorMessage;
